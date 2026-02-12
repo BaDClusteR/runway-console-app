@@ -1,0 +1,15 @@
+services:
+  Runway\Console\IApplication:
+    class: Runway\Console\Application
+
+  Runway\Console\Input\Parser\IInputParser:
+    class: Runway\Console\Input\Parser\InputParser
+
+  Runway\Console\Output\IOutput:
+    class: Runway\Console\Output\Output
+
+  Runway\Console\Output\Formatter\IOutputFormatter:
+    class: Runway\Console\Output\Formatter\OutputFormatter
+
+  Runway\Console\Output\Table\ITable:
+    class: Runway\Console\Output\Table\Table

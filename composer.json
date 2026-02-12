@@ -1,0 +1,28 @@
+{
+    "name": "bad_cluster/runway-console-app",
+    "version": "0.1.0",
+    "type": "library",
+    "authors": [
+        {
+            "name": "BaD ClusteR",
+            "email": "admin@badcluster.ru"
+        }
+    ],
+    "require": {
+        "php": ">=8.4",
+        "ext-zip": "*",
+        "bad_cluster/runway": "dev-main"
+    },
+    "require-dev": {
+        "roave/security-advisories": "dev-latest"
+    },
+    "autoload": {
+        "psr-4": {
+            "Runway\\Console\\": "src/"
+        },
+        "files": [
+            "bootstrap.php"
+        ]
+    },
+    "minimum-stability": "dev"
+}
