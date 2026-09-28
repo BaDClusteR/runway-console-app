@@ -81,24 +81,50 @@ class InputParser implements IInputParser {
 
         if (str_contains($nameValue, '=')) {
             [$name, $value] = explode('=', $nameValue, 2);
+            $def = $this->getOptionByName($name, $optionDefs);
+
+            if ($def->getMode() === ParameterModeEnum::VALUE_NONE) {
+                throw new InvalidParameterException("Option --{$name} does not accept a value.");
+            }
+
             $parsedOptions[$name] = $value;
             return;
         }
 
-        $name = $nameValue;
-        $def = $this->findOptionByName($name, $optionDefs);
+        $def = $this->getOptionByName($nameValue, $optionDefs);
+        $parsedOptions[$nameValue] = $this->readOptionValue($def, "--{$nameValue}", $tokens, $i);
+    }
 
-        if ($def && $def->getMode() === ParameterModeEnum::VALUE_NONE) {
-            $parsedOptions[$name] = '1';
-            return;
+    /**
+     * @param ParameterDTO[] $optionDefs
+     */
+    protected function getOptionByName(string $name, array $optionDefs): ParameterDTO {
+        return $this->findOptionByName($name, $optionDefs)
+            ?? throw new InvalidParameterException("Unknown option: --{$name}");
+    }
+
+    /**
+     * Reads the option value from the next token, if the option accepts a value.
+     */
+    protected function readOptionValue(ParameterDTO $def, string $displayName, array $tokens, int &$i): string {
+        if ($def->getMode() === ParameterModeEnum::VALUE_NONE) {
+            return '1';
         }
 
-        if (isset($tokens[$i + 1]) && !str_starts_with($tokens[$i + 1], '-')) {
+        $nextToken = $tokens[$i + 1] ?? null;
+
+        // Negative numbers are values, not options.
+        if ($nextToken !== null && (!str_starts_with($nextToken, '-') || is_numeric($nextToken))) {
             $i++;
-            $parsedOptions[$name] = $tokens[$i];
-        } else {
-            $parsedOptions[$name] = '1';
+
+            return $nextToken;
         }
+
+        if ($def->getMode() === ParameterModeEnum::VALUE_REQUIRED) {
+            throw new InvalidParameterException("Option {$displayName} requires a value.");
+        }
+
+        return '1';
     }
 
     protected function parseShortOption(
@@ -112,29 +138,21 @@ class InputParser implements IInputParser {
         $def = $this->findOptionByShortcut($shortcut, $optionDefs);
 
         if ($def) {
-            $name = $def->getName();
-
-            if ($def->getMode() === ParameterModeEnum::VALUE_NONE) {
-                $parsedOptions[$name] = '1';
-                return;
-            }
-
-            if (isset($tokens[$i + 1]) && !str_starts_with($tokens[$i + 1], '-')) {
-                $i++;
-                $parsedOptions[$name] = $tokens[$i];
-            } else {
-                $parsedOptions[$name] = '1';
-            }
+            $parsedOptions[$def->getName()] = $this->readOptionValue($def, "-{$shortcut}", $tokens, $i);
 
             return;
         }
 
+        // A cluster of flags, e.g. "-abc".
         foreach (str_split($shortcut) as $char) {
-            $charDef = $this->findOptionByShortcut($char, $optionDefs);
+            $charDef = $this->findOptionByShortcut($char, $optionDefs)
+                ?? throw new InvalidParameterException("Unknown option: -{$char}");
 
-            if ($charDef) {
-                $parsedOptions[$charDef->getName()] = '1';
+            if ($charDef->getMode() === ParameterModeEnum::VALUE_REQUIRED) {
+                throw new InvalidParameterException("Option -{$char} requires a value and cannot be combined.");
             }
+
+            $parsedOptions[$charDef->getName()] = '1';
         }
     }
 
@@ -170,6 +188,14 @@ class InputParser implements IInputParser {
      * @return array<string, string|null>
      */
     protected function mapArguments(array $positionalTokens, array $argumentDefs): array {
+        // E.g. a value with spaces that was not quoted.
+        if (count($positionalTokens) > count($argumentDefs)) {
+            throw new InvalidParameterException(
+                "Too many arguments: expected at most " . count($argumentDefs) . ", got " . count($positionalTokens)
+                . ". Values with spaces should be quoted."
+            );
+        }
+
         $result = [];
 
         foreach ($argumentDefs as $index => $def) {

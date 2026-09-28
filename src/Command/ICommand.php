@@ -14,6 +14,11 @@ interface ICommand {
     public function getDescription(): string;
 
     /**
+     * Group the command is shown in the commands list. Null means no group: such commands are shown first.
+     */
+    public function getGroup(): ?string;
+
+    /**
      * @return ParameterDTO[]
      */
     public function getParameters(): array;

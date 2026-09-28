@@ -31,13 +31,13 @@ class Table implements ITable {
      */
     protected function calculateColumnWidths(array $headers, array $rows): array {
         $widths = array_map(
-            static fn(string $header): int => mb_strlen($header),
+            fn(string $header): int => $this->getVisibleWidth($header),
             $headers
         );
 
         foreach ($rows as $row) {
             foreach ($row as $colIndex => $cell) {
-                $cellLength = mb_strlen((string)$cell);
+                $cellLength = $this->getVisibleWidth($this->getCellText($cell));
 
                 if (!isset($widths[$colIndex]) || $cellLength > $widths[$colIndex]) {
                     $widths[$colIndex] = $cellLength;
@@ -68,10 +68,30 @@ class Table implements ITable {
         $cells = [];
 
         foreach ($columnWidths as $colIndex => $width) {
-            $cellValue = (string)($row[$colIndex] ?? '');
-            $cells[] = ' ' . str_pad($cellValue, $width) . ' ';
+            $cellValue = $this->getCellText($row[$colIndex] ?? '');
+            $padding = max(0, $width - $this->getVisibleWidth($cellValue));
+            $cells[] = ' ' . $cellValue . str_repeat(' ', $padding) . ' ';
         }
 
         return '|' . implode('|', $cells) . '|' . PHP_EOL;
+    }
+
+    /**
+     * Line breaks would break the table layout, so they are replaced with spaces.
+     */
+    protected function getCellText(mixed $cell): string {
+        return (string)preg_replace('/\R/u', ' ', (string)$cell);
+    }
+
+    /**
+     * Width in terminal columns: wide characters (CJK, most emoji) take two columns, while formatting tags and
+     * escape sequences are not displayed at all.
+     */
+    protected function getVisibleWidth(string $text): int {
+        $text = (string)preg_replace('/<(?:fg|bg)=[a-z]+(?:;(?:fg|bg)=[a-z]+)*>|<\/>/', '', $text);
+
+        return mb_strwidth(
+            str_replace('\\<', '<', $text)
+        );
     }
 }

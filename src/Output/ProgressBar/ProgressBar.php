@@ -10,10 +10,14 @@ class ProgressBar implements IProgressBar {
     protected int $current = 0;
     protected string $message = '';
 
+    /** @var (callable(int $current, int $max): string)|null */
+    protected $counterFormatter = null;
+
     public function __construct(
         protected IOutputFormatter $formatter,
         protected int              $max,
-        protected int              $barWidth = 28
+        protected int              $barWidth = 28,
+        protected bool             $isDecorated = true
     ) {}
 
     public function start(): void {
@@ -41,15 +45,30 @@ class ProgressBar implements IProgressBar {
     }
 
     public function finish(): void {
-        $this->setProgress($this->max);
-        echo PHP_EOL;
+        $this->current = $this->max;
+
+        // Without a terminal, only the final state is output.
+        echo ($this->isDecorated ? "\r" : "")
+            . $this->formatter->format($this->buildLine(), $this->isDecorated)
+            . PHP_EOL;
     }
 
     public function setMessage(string $message): void {
         $this->message = $message;
     }
 
+    public function setCounterFormatter(?callable $formatter): void {
+        $this->counterFormatter = $formatter;
+    }
+
     protected function display(): void {
+        // Without a terminal, intermediate states would just litter the output (see finish()).
+        if ($this->isDecorated) {
+            echo "\r" . $this->formatter->format($this->buildLine());
+        }
+    }
+
+    protected function buildLine(): string {
         $percent = $this->max > 0
             ? (int)floor($this->current / $this->max * 100)
             : 0;
@@ -60,9 +79,7 @@ class ProgressBar implements IProgressBar {
 
         $empty = $this->barWidth - $filled;
 
-        $maxWidth = strlen((string)$this->max);
-        $counter = str_pad((string)$this->current, $maxWidth, ' ', STR_PAD_LEFT)
-            . '/' . $this->max;
+        $counter = $this->buildCounter();
 
         $bar = str_repeat('=', max(0, $filled - 1))
             . ($filled > 0 ? ($filled === $this->barWidth ? '=' : '>') : '')
@@ -74,6 +91,16 @@ class ProgressBar implements IProgressBar {
             $line .= " {$this->message}";
         }
 
-        echo "\r" . $this->formatter->format($line);
+        return $line;
+    }
+
+    protected function buildCounter(): string {
+        if ($this->counterFormatter) {
+            return ($this->counterFormatter)($this->current, $this->max);
+        }
+
+        $maxWidth = strlen((string)$this->max);
+
+        return str_pad((string)$this->current, $maxWidth, ' ', STR_PAD_LEFT) . '/' . $this->max;
     }
 }

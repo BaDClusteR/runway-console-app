@@ -1,0 +1,3 @@
+parameters:
+  # Indentation of the commands in the commands list. Can be overridden in the project parameters.
+  console_commands_list_indent: '  '

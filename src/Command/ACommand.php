@@ -11,18 +11,22 @@ use Runway\Console\Parameter\Enum\ParameterModeEnum;
 use Runway\Console\Parameter\Enum\ParameterTypeEnum;
 
 abstract class ACommand implements ICommand {
-    /** @var ParameterDTO[] */
-    private array $parameters = [];
+    /** @var ParameterDTO[]|null */
+    private ?array $parameters = null;
 
-    public function __construct() {
-        $this->configure();
-    }
-
+    /**
+     * Parameters are configured lazily, so commands can have their own constructors (e.g. for dependency injection)
+     * without calling the parent one.
+     */
     protected function configure(): void {}
 
     abstract public function getName(): string;
 
     abstract public function getDescription(): string;
+
+    public function getGroup(): ?string {
+        return null;
+    }
 
     abstract protected function execute(IInput $input, IOutput $output): int;
 
@@ -34,6 +38,11 @@ abstract class ACommand implements ICommand {
      * @return ParameterDTO[]
      */
     public function getParameters(): array {
+        if ($this->parameters === null) {
+            $this->parameters = [];
+            $this->configure();
+        }
+
         return $this->parameters;
     }
 
@@ -43,6 +52,7 @@ abstract class ACommand implements ICommand {
         string            $description = '',
         ?string           $default = null
     ): static {
+        $this->parameters ??= [];
         $this->parameters[] = new ParameterDTO(
             name: $name,
             type: ParameterTypeEnum::ARGUMENT,
@@ -61,6 +71,7 @@ abstract class ACommand implements ICommand {
         string            $description = '',
         ?string           $default = null
     ): static {
+        $this->parameters ??= [];
         $this->parameters[] = new ParameterDTO(
             name: $name,
             type: ParameterTypeEnum::OPTION,
