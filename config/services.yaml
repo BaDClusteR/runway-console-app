@@ -13,3 +13,11 @@ services:
 
   Runway\Console\Output\Table\ITable:
     class: Runway\Console\Output\Table\Table
+
+  Runway\Console\Prompt\IPrompt:
+    class: Runway\Console\Prompt\Prompt
+
+  Runway\Console\Command\ListRenderer\ICommandListRenderer:
+    class: Runway\Console\Command\ListRenderer\CommandListRenderer
+    arguments:
+      indent: '%console_commands_list_indent'

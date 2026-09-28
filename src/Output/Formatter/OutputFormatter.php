@@ -29,13 +29,41 @@ class OutputFormatter implements IOutputFormatter {
         'default' => '49',
     ];
 
-    public function format(string $message): string {
-        $message = str_replace('</>', "\033[0m", $message);
+    protected const array OPTIONS = [
+        'bold'       => '1',
+        'dim'        => '2',
+        'underscore' => '4',
+        'reverse'    => '7',
+    ];
 
-        return preg_replace_callback(
-            '/<((?:fg|bg)=[a-z]+(?:;(?:fg|bg)=[a-z]+)*)>/',
-            fn(array $matches): string => $this->parseTag($matches[1]),
-            $message
+    protected const string ESCAPED_TAG_START = '\\<';
+
+    protected const string CONTROL_CHAR_REPLACEMENT = "\u{FFFD}";
+
+    public function format(string $message, bool $isDecorated = true): string {
+        // Escaped "<" are split out, so they can never be a part of a tag.
+        $pieces = explode(static::ESCAPED_TAG_START, $message);
+
+        foreach ($pieces as &$piece) {
+            $piece = preg_replace_callback(
+                '/<((?:fg|bg|options)=[a-z,]+(?:;(?:fg|bg|options)=[a-z,]+)*)>/',
+                fn(array $matches): string => $isDecorated ? $this->parseTag($matches[1]) : '',
+                str_replace('</>', $isDecorated ? "\033[0m" : '', $piece)
+            );
+        }
+
+        return implode('<', $pieces);
+    }
+
+    public function escape(string $text): string {
+        return str_replace(
+            '<',
+            static::ESCAPED_TAG_START,
+            (string)preg_replace(
+                '/[\x00-\x08\x0B-\x1F\x7F]/',
+                static::CONTROL_CHAR_REPLACEMENT,
+                str_replace("\r\n", "\n", $text)
+            )
         );
     }
 
@@ -50,6 +78,12 @@ class OutputFormatter implements IOutputFormatter {
                 $codes[] = static::FG_COLORS[$color];
             } elseif ($type === 'bg' && isset(static::BG_COLORS[$color])) {
                 $codes[] = static::BG_COLORS[$color];
+            } elseif ($type === 'options') {
+                foreach (explode(',', $color) as $option) {
+                    if (isset(static::OPTIONS[$option])) {
+                        $codes[] = static::OPTIONS[$option];
+                    }
+                }
             }
         }
 
