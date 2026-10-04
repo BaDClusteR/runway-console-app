@@ -96,6 +96,10 @@ class Output implements IOutput {
         return $this->prompt->ask($question, $validator, $default);
     }
 
+    public function secret(string $question, ?callable $validator = null): mixed {
+        return $this->prompt->secret($question, $validator);
+    }
+
     public function isInteractive(): bool {
         return $this->prompt->isInteractive();
     }

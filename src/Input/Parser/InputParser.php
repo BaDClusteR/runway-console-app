@@ -124,7 +124,8 @@ class InputParser implements IInputParser {
             throw new InvalidParameterException("Option {$displayName} requires a value.");
         }
 
-        return '1';
+        // An empty string, not "1": the option given without a value must differ from the option with value "1".
+        return '';
     }
 
     protected function parseShortOption(
@@ -152,7 +153,7 @@ class InputParser implements IInputParser {
                 throw new InvalidParameterException("Option -{$char} requires a value and cannot be combined.");
             }
 
-            $parsedOptions[$charDef->getName()] = '1';
+            $parsedOptions[$charDef->getName()] = ($charDef->getMode() === ParameterModeEnum::VALUE_NONE) ? '1' : '';
         }
     }
 

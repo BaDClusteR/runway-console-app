@@ -44,4 +44,31 @@ interface IPrompt {
      * @throws ConsoleException If not interactive and there is no default.
      */
     public function choice(string $question, array $choices, int|string|null $default = null): int|string;
+
+    /**
+     * A text answer: typing, pasting, Backspace, Ctrl+U to clear. Asked again while the validator rejects it (throws
+     * InvalidAnswerException).
+     *
+     * @param (callable(string $answer): mixed)|null $validator Returns the result of ask().
+     * @param string|null                            $default   The answer on an empty input.
+     *
+     * @return mixed The answer, or what the validator returned.
+     *
+     * @throws PromptCancelledException On Ctrl+C or Esc.
+     * @throws ConsoleException If not interactive and there is no default.
+     */
+    public function ask(string $question, ?callable $validator = null, ?string $default = null): mixed;
+
+    /**
+     * Like ask(), but the typed characters are masked (e.g. for a password). There is no default answer: an empty
+     * input is an empty string.
+     *
+     * @param (callable(string $answer): mixed)|null $validator Returns the result of secret().
+     *
+     * @return mixed The answer, or what the validator returned.
+     *
+     * @throws PromptCancelledException On Ctrl+C or Esc.
+     * @throws ConsoleException If not interactive or the input cannot be hidden (no stty, e.g. on Windows).
+     */
+    public function secret(string $question, ?callable $validator = null): mixed;
 }
