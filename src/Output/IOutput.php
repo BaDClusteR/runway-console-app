@@ -62,6 +62,11 @@ interface IOutput {
      */
     public function ask(string $question, ?callable $validator = null, ?string $default = null): mixed;
 
+    /**
+     * A masked text answer, e.g. a password (see IPrompt::secret()).
+     */
+    public function secret(string $question, ?callable $validator = null): mixed;
+
     public function isInteractive(): bool;
 
     public function getFormatter(): IOutputFormatter;

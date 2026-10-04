@@ -121,13 +121,53 @@ class Prompt implements IPrompt {
             return $validator ? $validator($default) : $default;
         }
 
-        while (true) {
-            $answer = $this->withRawMode(
+        return $this->askUntilValid(
+            $question,
+            fn(): string => $this->withRawMode(
                 fn(): string => $this->runAsk($question, $default),
                 fn(): string => $this->readAskLine($question, $default)
-            );
+            ),
+            $this->formatter->escape(...),
+            $validator
+        );
+    }
 
-            $this->writeAnswer($question, $this->formatter->escape($answer));
+    public function secret(string $question, ?callable $validator = null): mixed {
+        if (!$this->isInteractive()) {
+            throw new ConsoleException("$question: an answer is required, but the terminal is not interactive.");
+        }
+
+        return $this->askUntilValid(
+            $question,
+            // Without the raw mode the typed text would be echoed.
+            fn(): string => $this->withRawMode(
+                fn(): string => $this->runAsk($question, null, true),
+                static fn(): never => throw new ConsoleException(
+                    "$question: the input cannot be hidden in this terminal (stty is not available)."
+                )
+            ),
+            $this->mask(...),
+            $validator
+        );
+    }
+
+    /**
+     * @param callable(): string                     $read          Reads the answer.
+     * @param callable(string $answer): string       $formatAnswer  The answer as it is shown after the question.
+     * @param (callable(string $answer): mixed)|null $validator
+     *
+     * @throws PromptCancelledException
+     */
+    protected function askUntilValid(
+        string    $question,
+        callable  $read,
+        callable  $formatAnswer,
+        ?callable $validator
+    ): mixed {
+        while (true) {
+            $answer = $read();
+
+            $this->writeAnswer($question, $formatAnswer($answer));
 
             if ($validator === null) {
                 return $answer;
@@ -219,9 +259,11 @@ class Prompt implements IPrompt {
     /**
      * A simple line editor: typing, pasting, Backspace, Ctrl+U to clear.
      *
+     * @param bool $isMasked Show the typed characters as bullets.
+     *
      * @throws PromptCancelledException
      */
-    protected function runAsk(string $question, ?string $default): string {
+    protected function runAsk(string $question, ?string $default, bool $isMasked = false): string {
         $value = '';
         // A multibyte character can come in parts.
         $incompleteBytes = '';
@@ -234,7 +276,8 @@ class Prompt implements IPrompt {
             $isSeparateLine = !$this->fits($prefix . $hint . '__________');
             $inputPrefix = $isSeparateLine ? '<fg=cyan>❯</> ' : $prefix;
             $visibleWidth = $this->getTerminalWidth() - 2 - mb_strwidth($this->formatter->format($inputPrefix . $hint, false));
-            $inputLine = $inputPrefix . $hint . $this->formatter->escape($this->getTail($value, $visibleWidth)) . $cursor;
+            $shownValue = $this->getTail($isMasked ? $this->mask($value) : $value, $visibleWidth);
+            $inputLine = $inputPrefix . $hint . $this->formatter->escape($shownValue) . $cursor;
 
             $this->redraw($isSeparateLine ? [$this->formatQuestion($question), $inputLine] : [$inputLine]);
 
@@ -276,6 +319,13 @@ class Prompt implements IPrompt {
                 return ($value !== '') ? $value : ($default ?? '');
             }
         }
+    }
+
+    /**
+     * A bullet for every character.
+     */
+    protected function mask(string $text): string {
+        return str_repeat('•', mb_strlen($text));
     }
 
     /**
