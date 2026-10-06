@@ -4,7 +4,13 @@ declare(strict_types=1);
 
 namespace Runway\Console\Output\Table;
 
+use Runway\Console\Output\Formatter\IOutputFormatter;
+
 class Table implements ITable {
+    public function __construct(
+        protected IOutputFormatter $formatter
+    ) {}
+
     public function render(array $headers, array $rows): string {
         $columnWidths = $this->calculateColumnWidths($headers, $rows);
 
@@ -85,13 +91,12 @@ class Table implements ITable {
 
     /**
      * Width in terminal columns: wide characters (CJK, most emoji) take two columns, while formatting tags and
-     * escape sequences are not displayed at all.
+     * escape sequences are not displayed at all. The text is formatted without the decoration, so the tags are
+     * removed exactly like the formatter parses them (e.g. "<options=bold>", escaped "<").
      */
     protected function getVisibleWidth(string $text): int {
-        $text = (string)preg_replace('/<(?:fg|bg)=[a-z]+(?:;(?:fg|bg)=[a-z]+)*>|<\/>/', '', $text);
-
         return mb_strwidth(
-            str_replace('\\<', '<', $text)
+            $this->formatter->format($text, false)
         );
     }
 }
