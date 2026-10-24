@@ -118,6 +118,21 @@ class InputParserTest extends TestCase {
         self::assertSame('1', $result['options']['level']);
     }
 
+    public function testNegativeNumbersAreArguments(): void {
+        self::assertSame(['source' => '-5', 'target' => '-0.5'], $this->parse(['-5', '-0.5'])['arguments']);
+        self::assertSame(['source' => '-1e3', 'target' => 'out'], $this->parse(['-f', '-1e3'])['arguments']);
+    }
+
+    public function testOptionWithNumericShortcutIsNotNegativeNumber(): void {
+        $input = $this->parser->parse(['-1', '-2'], [
+            new ParameterDTO('one', ParameterTypeEnum::OPTION, ParameterModeEnum::VALUE_NONE, shortcut: '1'),
+            new ParameterDTO('number', ParameterTypeEnum::ARGUMENT, ParameterModeEnum::REQUIRED),
+        ]);
+
+        self::assertSame(['one' => '1'], $input->getOptions());
+        self::assertSame(['number' => '-2'], $input->getArguments());
+    }
+
     public function testSingleDashIsArgument(): void {
         // Usually means STDIN.
         self::assertSame(['source' => '-', 'target' => 'out'], $this->parse(['-'])['arguments']);

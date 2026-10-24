@@ -15,6 +15,7 @@ class ProgressBar implements IProgressBar {
     protected const float TERMINAL_WIDTH_TTL = 1.0;
 
     protected int $current = 0;
+    protected bool $isFinished = false;
     protected string $message = '';
 
     /** @var (callable(int $current, int $max): string)|null */
@@ -34,6 +35,7 @@ class ProgressBar implements IProgressBar {
 
     public function start(): void {
         $this->current = 0;
+        $this->isFinished = false;
         $this->display();
     }
 
@@ -47,7 +49,7 @@ class ProgressBar implements IProgressBar {
     }
 
     public function setProgress(int $current): void {
-        $this->current = min($current, $this->max);
+        $this->current = min(max($current, 0), $this->max);
         $this->display();
     }
 
@@ -58,6 +60,7 @@ class ProgressBar implements IProgressBar {
 
     public function finish(): void {
         $this->current = $this->max;
+        $this->isFinished = true;
 
         // Without a terminal, only the final state is output.
         echo ($this->isDecorated ? static::REWRITE_LINE : '')
@@ -81,13 +84,13 @@ class ProgressBar implements IProgressBar {
     }
 
     protected function buildLine(): string {
-        $percent = $this->max > 0
-            ? (int)floor($this->current / $this->max * 100)
-            : 0;
+        // Nothing to do (max 0) is done only when finished.
+        $fraction = ($this->max > 0)
+            ? $this->current / $this->max
+            : (float)$this->isFinished;
 
-        $filled = $this->max > 0
-            ? (int)round($this->barWidth * $this->current / $this->max)
-            : 0;
+        $percent = (int)floor($fraction * 100);
+        $filled = (int)round($this->barWidth * $fraction);
 
         $empty = $this->barWidth - $filled;
 

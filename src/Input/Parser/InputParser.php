@@ -36,7 +36,7 @@ class InputParser implements IInputParser {
 
             if (str_starts_with($token, '--')) {
                 $this->parseLongOption($token, $tokens, $i, $optionDefs, $parsedOptions);
-            } elseif (str_starts_with($token, '-') && $token !== '-') {
+            } elseif (str_starts_with($token, '-') && $token !== '-' && !$this->isNegativeNumber($token, $optionDefs)) {
                 $this->parseShortOption($token, $tokens, $i, $optionDefs, $parsedOptions);
             } else {
                 $positionalTokens[] = $token;
@@ -155,6 +155,15 @@ class InputParser implements IInputParser {
 
             $parsedOptions[$charDef->getName()] = ($charDef->getMode() === ParameterModeEnum::VALUE_NONE) ? '1' : '';
         }
+    }
+
+    /**
+     * A negative number (e.g. "-5") is an argument, unless there is an option with such a shortcut (e.g. "-1").
+     *
+     * @param ParameterDTO[] $optionDefs
+     */
+    protected function isNegativeNumber(string $token, array $optionDefs): bool {
+        return is_numeric($token) && $this->findOptionByShortcut(substr($token, 1), $optionDefs) === null;
     }
 
     /**

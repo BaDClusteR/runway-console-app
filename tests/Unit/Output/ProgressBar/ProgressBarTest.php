@@ -156,7 +156,23 @@ class ProgressBarTest extends TestCase {
     public function testZeroMax(): void {
         $bar = $this->createBar(0);
 
+        // Nothing to do is done when finished.
         self::assertSame(static::line('0/0', '----------', '0%'), $this->capture($bar->start(...)));
+        self::assertSame(static::line('0/0', '==========', '100%') . PHP_EOL, $this->capture($bar->finish(...)));
+
+        // Started again.
+        self::assertSame(static::line('0/0', '----------', '0%'), $this->capture($bar->start(...)));
+    }
+
+    public function testNegativeProgressIsZero(): void {
+        $bar = $this->createBar(10);
+
+        $output = $this->capture(static function () use ($bar): void {
+            $bar->setProgress(-5);
+            $bar->advance(-3);
+        });
+
+        self::assertSame(static::line(' 0/10', '----------', '0%') . static::line(' 0/10', '----------', '0%'), $output);
     }
 
     public function testCounterFormatter(): void {
