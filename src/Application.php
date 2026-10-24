@@ -233,12 +233,12 @@ class Application extends Singleton implements IApplication {
     protected function getCommands(): array {
         $commands = [];
 
-        foreach (Container::getInstance()->getServicesByTag('console.command') as $serviceName => $service) {
+        foreach (Container::getInstance()->getServicesByTag('console.command') as $service) {
             if (!$service instanceof ICommand) {
                 throw new ConsoleException(
                     sprintf(
-                        'Service "%s" has the "console.command" tag, but does not implement %s.',
-                        $serviceName,
+                        'A service with the "console.command" tag is not a command: %s does not implement %s.',
+                        get_debug_type($service),
                         ICommand::class
                     )
                 );
