@@ -9,6 +9,7 @@ use Runway\Console\Output\ProgressBar\IProgressBar;
 use Runway\Console\Output\ProgressBar\ProgressBar;
 use Runway\Console\Output\Table\ITable;
 use Runway\Console\Prompt\IPrompt;
+use Runway\Console\Terminal\ITerminal;
 
 class Output implements IOutput {
     protected bool $isDecorated;
@@ -18,7 +19,8 @@ class Output implements IOutput {
     public function __construct(
         protected IOutputFormatter $formatter,
         protected ITable           $table,
-        protected IPrompt          $prompt
+        protected IPrompt          $prompt,
+        protected ITerminal        $terminal
     ) {
         $this->isDecorated = $this->isStreamDecorated(STDOUT);
         $this->isErrorDecorated = $this->isStreamDecorated(STDERR);
@@ -76,7 +78,7 @@ class Output implements IOutput {
     }
 
     public function createProgressBar(int $max): IProgressBar {
-        return new ProgressBar($this->formatter, $max, isDecorated: $this->isDecorated);
+        return new ProgressBar($this->formatter, $this->terminal, $max, isDecorated: $this->isDecorated);
     }
 
     public function confirm(

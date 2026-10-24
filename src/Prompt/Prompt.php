@@ -8,6 +8,7 @@ use Runway\Console\Exception\ConsoleException;
 use Runway\Console\Exception\InvalidAnswerException;
 use Runway\Console\Exception\PromptCancelledException;
 use Runway\Console\Output\Formatter\IOutputFormatter;
+use Runway\Console\Terminal\ITerminal;
 
 /**
  * Reads single key presses in the terminal's raw mode (via stty). Without stty (e.g. on Windows), the answers are read
@@ -39,8 +40,6 @@ class Prompt implements IPrompt {
 
     protected const int MAX_VISIBLE_CHOICES = 10;
 
-    protected const int DEFAULT_TERMINAL_WIDTH = 80;
-
     protected const string TERMINAL = '/dev/tty';
 
     /** @var resource */
@@ -55,7 +54,8 @@ class Prompt implements IPrompt {
     protected int $renderedLinesCount = 0;
 
     public function __construct(
-        protected IOutputFormatter $formatter
+        protected IOutputFormatter $formatter,
+        protected ITerminal        $terminal
     ) {
         $this->input = STDIN;
         $this->output = STDERR;
@@ -548,14 +548,12 @@ class Prompt implements IPrompt {
     }
 
     protected function getTerminalWidth(): int {
-        $size = function_exists('shell_exec') ? trim((string)$this->stty('size')) : '';
-        $columns = (int)(explode(' ', $size)[1] ?? 0);
-
-        return ($columns > 0) ? $columns : static::DEFAULT_TERMINAL_WIDTH;
+        return $this->terminal->getWidth();
     }
 
     protected function stty(string $arguments): ?string {
-        $result = shell_exec('stty ' . $arguments . ' < ' . static::TERMINAL . ' 2>/dev/null');
+        // Errors are suppressed first: without a controlling terminal, even opening the device fails.
+        $result = shell_exec('stty ' . $arguments . ' 2>/dev/null < ' . static::TERMINAL);
 
         return is_string($result) ? $result : null;
     }

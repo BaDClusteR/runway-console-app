@@ -17,6 +17,9 @@ services:
   Runway\Console\Prompt\IPrompt:
     class: Runway\Console\Prompt\Prompt
 
+  Runway\Console\Terminal\ITerminal:
+    class: Runway\Console\Terminal\Terminal
+
   Runway\Console\Command\ListRenderer\ICommandListRenderer:
     class: Runway\Console\Command\ListRenderer\CommandListRenderer
     arguments:

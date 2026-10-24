@@ -7,6 +7,19 @@ namespace Runway\Console\Output\Table;
 use Runway\Console\Output\Formatter\IOutputFormatter;
 
 class Table implements ITable {
+    protected const string HORIZONTAL = '─';
+
+    protected const string VERTICAL = '│';
+
+    /** Left, middle and right junctions of the top border. */
+    protected const array TOP = ['┌', '┬', '┐'];
+
+    /** The same for the line between the header and the rows. */
+    protected const array MIDDLE = ['├', '┼', '┤'];
+
+    /** The same for the bottom border. */
+    protected const array BOTTOM = ['└', '┴', '┘'];
+
     public function __construct(
         protected IOutputFormatter $formatter
     ) {}
@@ -14,18 +27,19 @@ class Table implements ITable {
     public function render(array $headers, array $rows): string {
         $columnWidths = $this->calculateColumnWidths($headers, $rows);
 
-        $output = '';
-        $separator = $this->buildSeparator($columnWidths);
-
-        $output .= $separator;
+        $output = $this->buildSeparator($columnWidths, static::TOP);
         $output .= $this->buildRow($headers, $columnWidths);
-        $output .= $separator;
+
+        // Without rows, the header line would be followed by two borders.
+        if ($rows !== []) {
+            $output .= $this->buildSeparator($columnWidths, static::MIDDLE);
+        }
 
         foreach ($rows as $row) {
             $output .= $this->buildRow($row, $columnWidths);
         }
 
-        $output .= $separator;
+        $output .= $this->buildSeparator($columnWidths, static::BOTTOM);
 
         return $output;
     }
@@ -55,15 +69,18 @@ class Table implements ITable {
     }
 
     /**
-     * @param int[] $columnWidths
+     * @param int[]    $columnWidths
+     * @param string[] $junctions Left, middle and right junctions (see TOP, MIDDLE, BOTTOM).
      */
-    protected function buildSeparator(array $columnWidths): string {
+    protected function buildSeparator(array $columnWidths, array $junctions): string {
+        [$left, $middle, $right] = $junctions;
+
         $parts = array_map(
-            static fn(int $width): string => str_repeat('-', $width + 2),
+            static fn(int $width): string => str_repeat(static::HORIZONTAL, $width + 2),
             $columnWidths
         );
 
-        return '+' . implode('+', $parts) . '+' . PHP_EOL;
+        return $left . implode($middle, $parts) . $right . PHP_EOL;
     }
 
     /**
@@ -79,7 +96,7 @@ class Table implements ITable {
             $cells[] = ' ' . $cellValue . str_repeat(' ', $padding) . ' ';
         }
 
-        return '|' . implode('|', $cells) . '|' . PHP_EOL;
+        return static::VERTICAL . implode(static::VERTICAL, $cells) . static::VERTICAL . PHP_EOL;
     }
 
     /**
