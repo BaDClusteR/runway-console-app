@@ -1,6 +1,5 @@
 {
     "name": "bad_cluster/runway-console-app",
-    "version": "0.1.0",
     "description": "Console applications for Runway: commands, input parsing, formatted output, tables, progress bars and interactive prompts.",
     "type": "library",
     "license": "MIT",
