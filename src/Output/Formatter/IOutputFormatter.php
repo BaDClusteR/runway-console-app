@@ -15,7 +15,8 @@ interface IOutputFormatter {
 
     /**
      * Escape arbitrary text (e.g. user data) so it's output as is: formatting tags are not parsed, and control
-     * characters (except tabs and line breaks) are replaced, so the text cannot control the terminal.
+     * characters (except tabs and line breaks, including the C1 ones) and invalid UTF-8 bytes are replaced, so the text
+     * cannot control the terminal.
      */
     public function escape(string $text): string;
 }

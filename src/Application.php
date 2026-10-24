@@ -23,6 +23,9 @@ class Application extends Singleton implements IApplication {
     /** @var list<string> */
     protected const array HELP_OPTIONS = ['--help', '-h'];
 
+    /** @var list<string> */
+    protected const array CLI_SAPIS = ['cli', 'phpdbg'];
+
     public function __construct(
         protected IEventDispatcher      $eventDispatcher,
         protected IInputParser          $inputParser,
@@ -32,6 +35,12 @@ class Application extends Singleton implements IApplication {
     ) {}
 
     public function run(): int {
+        // E.g. a console script reachable by HTTP: $_SERVER['argv'] can come from the query string there.
+        if (!in_array($this->getSapi(), static::CLI_SAPIS, true)) {
+            echo 'The console application can be run only from the command line.' . PHP_EOL;
+            return 1;
+        }
+
         $this->eventDispatcher->dispatch('kernel.init', null);
 
         $argv = $this->getArgv();
@@ -62,7 +71,8 @@ class Application extends Singleton implements IApplication {
 
             return $command->run($input, $this->output);
         } catch (CommandNotFoundException $e) {
-            $this->output->error($e->getMessage());
+            // The message contains the command name as it was typed: it's escaped like any other.
+            $this->renderException($e);
             $this->listCommands();
             return 1;
         } catch (Throwable $e) {
@@ -97,11 +107,34 @@ class Application extends Singleton implements IApplication {
                         $exception::class,
                         $exception->getFile(),
                         $exception->getLine(),
-                        $exception->getTraceAsString()
+                        $this->formatTrace($exception)
                     )
                 )
             );
         }
+    }
+
+    /**
+     * Like Throwable::getTraceAsString(), but without the argument values: they can be secrets (e.g. a password
+     * passed to a prompt validator), and they are shown unless zend.exception_ignore_args is on.
+     */
+    protected function formatTrace(Throwable $e): string {
+        $lines = [];
+
+        foreach ($e->getTrace() as $index => $frame) {
+            $location = isset($frame['file']) ? "{$frame['file']}(" . ($frame['line'] ?? 0) . ')' : '[internal function]';
+            $function = ($frame['class'] ?? '') . ($frame['type'] ?? '') . $frame['function'];
+
+            $lines[] = "#{$index} {$location}: {$function}()";
+        }
+
+        $lines[] = '#' . count($lines) . ' {main}';
+
+        return implode("\n", $lines);
+    }
+
+    protected function getSapi(): string {
+        return PHP_SAPI;
     }
 
     protected function isDebugMode(): bool {
@@ -139,7 +172,8 @@ class Application extends Singleton implements IApplication {
         }
 
         $this->output->writeln('');
-        $this->output->writeln($command->getDescription());
+        // Plain text, as in the commands list.
+        $this->output->writeln($this->output->escape($command->getDescription()));
         $this->output->writeln('');
         $this->output->writeln('<fg=green>Usage:</>');
         $this->output->writeln('  ' . $this->output->escape($usage));

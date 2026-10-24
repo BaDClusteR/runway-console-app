@@ -146,6 +146,44 @@ class TerminalTest extends TestCase {
         static::assertTerminalRestored($session);
     }
 
+    public function testSecretTypedDuringValidationIsNotShown(): void {
+        $session = new TerminalSession(['demo:prompt', 'slow-secret']);
+        $session
+            ->waitFor('Password?')
+            ->press('wrong', static::ENTER)
+            // The next attempt is typed while the first one is checked: there is no prompt at the moment.
+            ->type('hunter2')
+            ->waitFor(static::HIDE_CURSOR, 2)
+            ->press(static::ENTER);
+
+        self::assertSame(0, $session->finish());
+        self::assertSame(
+            ['? Password? •••••', '✖ Wrong password.', '? Password? •••••••', "Answer: 'hunter2'"],
+            $session->getScreen()
+        );
+        // Only the command prints it.
+        self::assertSame(1, substr_count($session->getOutput(), 'hunter2'));
+        static::assertTerminalRestored($session);
+    }
+
+    public function testTerminalIsRestoredOnSigterm(): void {
+        if (!function_exists('pcntl_signal')) {
+            self::markTestSkipped('pcntl is not available.');
+        }
+
+        $session = new TerminalSession(['demo:prompt', 'choice', '--pid']);
+        $session->waitFor('Fruit?');
+
+        preg_match('/PID: (\d+)/', $session->getOutput(), $matches);
+        $pid = (int)($matches[1] ?? 0);
+        self::assertGreaterThan(0, $pid);
+        function_exists('posix_kill') ? posix_kill($pid, SIGTERM) : exec("kill -TERM {$pid}");
+
+        // 128 + SIGTERM, like the shell shows a process terminated by the signal.
+        self::assertSame(128 + 15, $session->finish());
+        static::assertTerminalRestored($session);
+    }
+
     /**
      * @return iterable<string, array{string}>
      */

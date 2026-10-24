@@ -9,6 +9,7 @@ use Runway\Console\Exception\InvalidAnswerException;
 use Runway\Console\Exception\PromptCancelledException;
 use Runway\Console\Output\Formatter\IOutputFormatter;
 use Runway\Console\Terminal\ITerminal;
+use ValueError;
 
 /**
  * Reads single key presses in the terminal's raw mode (via stty). Without stty (e.g. on Windows), the answers are read
@@ -56,13 +57,24 @@ class Prompt implements IPrompt {
     /** @var string[] The keys read, but not handled yet (several keys can come in one read). */
     protected array $pendingKeys = [];
 
+    /** The terminal settings before the prompt: restored even if the app is terminated during the prompt. */
+    protected ?string $stateOnExit = null;
+
+    protected bool $isRestoreOnShutdownRegistered = false;
+
+    /** @var array<int, int> Signal => the previous handler (SIG_DFL), while the prompt handles the signal. */
+    protected array $previousSignalHandlers = [];
+
+    protected ?bool $previousAsyncSignals = null;
+
     public function __construct(
         protected IOutputFormatter $formatter,
         protected ITerminal        $terminal
     ) {
-        $this->input = STDIN;
-        $this->output = STDERR;
-        $this->isDecorated = (getenv('NO_COLOR') === false || getenv('NO_COLOR') === '') && stream_isatty(STDERR);
+        // The constants exist only in the CLI; elsewhere the app does not run (see Application::run()).
+        $this->input = defined('STDIN') ? STDIN : $this->openEmptyStream();
+        $this->output = defined('STDERR') ? STDERR : $this->openEmptyStream();
+        $this->isDecorated = (getenv('NO_COLOR') === false || getenv('NO_COLOR') === '') && stream_isatty($this->output);
     }
 
     public function isInteractive(): bool {
@@ -140,7 +152,7 @@ class Prompt implements IPrompt {
             throw new ConsoleException("$question: an answer is required, but the terminal is not interactive.");
         }
 
-        return $this->askUntilValid(
+        $ask = fn(): mixed => $this->askUntilValid(
             $question,
             // Without the raw mode the typed text would be echoed.
             fn(): string => $this->withRawMode(
@@ -152,6 +164,12 @@ class Prompt implements IPrompt {
             $this->mask(...),
             $validator
         );
+
+        $state = $this->getTerminalState();
+
+        // The echo is off also while the answer is validated (e.g. by a slow API): the next attempt can be typed
+        // meanwhile, and it must not be shown.
+        return ($state !== null) ? $this->withTerminalSettings($state, '-echo', $ask) : $ask();
     }
 
     /**
@@ -378,17 +396,117 @@ class Prompt implements IPrompt {
         }
 
         // No line buffering and echo; Ctrl+C is read as a key, so the terminal is always restored.
-        $this->stty('-icanon -echo -isig min 1');
-        $this->write("\033[?25l");
+        return $this->withTerminalSettings($state, '-icanon -echo -isig min 1', function () use ($interactive): mixed {
+            $this->write("\033[?25l");
+
+            try {
+                return $interactive();
+            } finally {
+                // The keys typed after the answer are not an answer to the next question (e.g. an extra Enter).
+                $this->pendingKeys = [];
+                $this->write("\033[?25h");
+            }
+        });
+    }
+
+    /**
+     * Changes the terminal settings while the callable runs. The settings are restored after it, and also if the app
+     * is terminated meanwhile (exit(), a fatal error, SIGTERM or SIGHUP): a terminal without echo would be unusable.
+     *
+     * @template T
+     *
+     * @param string        $state    The current settings (see getTerminalState()).
+     * @param string        $settings stty arguments.
+     * @param callable(): T $callable
+     *
+     * @return T
+     */
+    protected function withTerminalSettings(string $state, string $settings, callable $callable): mixed {
+        // The nested changes are restored by the outer ones on termination.
+        $isOutermost = ($this->stateOnExit === null);
+
+        if ($isOutermost) {
+            $this->stateOnExit = $state;
+            $this->restoreOnTermination();
+        }
+
+        $this->stty($settings);
 
         try {
-            return $interactive();
+            return $callable();
         } finally {
-            // The keys typed after the answer are not an answer to the next question (e.g. an extra Enter).
-            $this->pendingKeys = [];
-            $this->write("\033[?25h");
             $this->stty(escapeshellarg($state));
+
+            if ($isOutermost) {
+                $this->stateOnExit = null;
+                $this->restoreSignalHandlers();
+            }
         }
+    }
+
+    protected function restoreOnTermination(): void {
+        if (!$this->isRestoreOnShutdownRegistered) {
+            register_shutdown_function($this->restoreTerminal(...));
+            $this->isRestoreOnShutdownRegistered = true;
+        }
+
+        if (!function_exists('pcntl_signal')) {
+            return;
+        }
+
+        foreach ([SIGTERM, SIGHUP] as $signal) {
+            // The app's own handlers are kept.
+            if (pcntl_signal_get_handler($signal) === SIG_DFL) {
+                $this->previousSignalHandlers[$signal] = SIG_DFL;
+                // The waiting for a key is interrupted, otherwise the handler would run only after a key press.
+                pcntl_signal($signal, $this->terminate(...), false);
+            }
+        }
+
+        if ($this->previousSignalHandlers !== []) {
+            // The handler runs right away, not after the next "tick".
+            $this->previousAsyncSignals = pcntl_async_signals(true);
+        }
+    }
+
+    protected function restoreSignalHandlers(): void {
+        foreach ($this->previousSignalHandlers as $signal => $handler) {
+            pcntl_signal($signal, $handler);
+        }
+
+        $this->previousSignalHandlers = [];
+
+        if ($this->previousAsyncSignals !== null) {
+            pcntl_async_signals($this->previousAsyncSignals);
+            $this->previousAsyncSignals = null;
+        }
+    }
+
+    /**
+     * The signal handler: like the default one (the app exits), but the terminal is restored first.
+     */
+    protected function terminate(int $signal): never {
+        $this->restoreTerminal();
+
+        // The shell convention for a process terminated by a signal.
+        exit(128 + $signal);
+    }
+
+    /**
+     * Restores the terminal settings from before the prompt, if the prompt is still active (on termination).
+     */
+    protected function restoreTerminal(): void {
+        $state = $this->stateOnExit;
+
+        if ($state === null) {
+            return;
+        }
+
+        // Once: e.g. a signal can come while restoring.
+        $this->stateOnExit = null;
+
+        $this->write("\033[?25h");
+        $this->stty(escapeshellarg($state));
     }
 
     /**
@@ -464,6 +582,7 @@ class Prompt implements IPrompt {
      */
     protected function readKey(): string {
         if ($this->pendingKeys === []) {
+            $this->waitForInput();
             $chunk = fread($this->input, static::READ_SIZE);
             $this->pendingKeys = ($chunk === false || $chunk === '') ? [''] : $this->splitKeys($chunk);
         }
@@ -477,6 +596,22 @@ class Prompt implements IPrompt {
         }
 
         return $key;
+    }
+
+    /**
+     * Waits for a key press. Unlike a blocking read (PHP restarts it), the waiting is interrupted by a signal, so the
+     * signal handler runs (see restoreOnTermination()). The read follows anyway, e.g. if the stream cannot be selected.
+     */
+    protected function waitForInput(): void {
+        $read = [$this->input];
+        $write = $except = null;
+
+        try {
+            // A warning on the interruption.
+            @stream_select($read, $write, $except, null);
+        } catch (ValueError) {
+            // The stream cannot be selected (e.g. a user-space one): it's removed, and nothing is left to select.
+        }
     }
 
     /**
@@ -587,6 +722,13 @@ class Prompt implements IPrompt {
         $result = shell_exec('stty ' . $arguments . ' 2>/dev/null < ' . static::TERMINAL);
 
         return is_string($result) ? $result : null;
+    }
+
+    /**
+     * @return resource
+     */
+    protected function openEmptyStream() {
+        return fopen('php://memory', 'r+b') ?: throw new ConsoleException('A stream cannot be opened.');
     }
 
     protected function writeFormatted(string $message): void {

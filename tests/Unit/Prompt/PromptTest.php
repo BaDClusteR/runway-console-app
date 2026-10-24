@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Runway\Console\Tests\Unit\Prompt;
 
+use Closure;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Runway\Console\Exception\ConsoleException;
@@ -48,6 +49,7 @@ class PromptTest extends TestCase {
      */
     protected static function assertTerminalRestored(TestPrompt $prompt): void {
         self::assertSame([static::RAW_MODE, escapeshellarg('saved-state')], $prompt->sttyCalls);
+        self::assertSame('saved-state', $prompt->terminalState);
         $output = $prompt->getOutput();
 
         self::assertStringStartsWith(static::HIDE_CURSOR, $output);
@@ -420,7 +422,13 @@ class PromptTest extends TestCase {
         self::assertSame(['? Password? •••_'], $prompt->getLastFrame());
         self::assertSame(['? Password? •••'], $prompt->getScreen());
         self::assertStringNotContainsString('ä', $prompt->getOutput());
-        static::assertTerminalRestored($prompt);
+
+        // The echo is off for the whole question; the raw mode is inside.
+        self::assertSame(
+            ['-echo', static::RAW_MODE, escapeshellarg('saved-state -echo'), escapeshellarg('saved-state')],
+            $prompt->sttyCalls
+        );
+        self::assertSame('saved-state', $prompt->terminalState);
     }
 
     public function testSecretValidator(): void {
@@ -437,6 +445,109 @@ class PromptTest extends TestCase {
         self::assertSame('terces', $result);
         self::assertSame(['? Password? •••', '✖ Too simple.', '? Password? ••••••'], $prompt->getScreen());
         self::assertStringNotContainsString('secret', $prompt->getOutput());
+    }
+
+    public function testSecretEchoIsOffWhileValidating(): void {
+        $prompt = new TestPrompt(['wrong', static::ENTER, 'right', static::ENTER]);
+        $statesOnValidation = [];
+
+        $prompt->secret('Password?', static function (string $answer) use ($prompt, &$statesOnValidation): string {
+            // E.g. a slow API: the user can type the next attempt meanwhile.
+            $statesOnValidation[] = $prompt->terminalState;
+
+            return ($answer === 'right') ? $answer : throw new InvalidAnswerException('Wrong password.');
+        });
+
+        self::assertSame(['saved-state -echo', 'saved-state -echo'], $statesOnValidation);
+        self::assertSame('saved-state', $prompt->terminalState);
+    }
+
+    public function testTerminalIsRestoredOnTermination(): void {
+        $prompt = new TestPrompt(['secret', static::ENTER]);
+        $afterTermination = [];
+
+        $prompt->secret('Password?', static function () use ($prompt, &$afterTermination): void {
+            // E.g. exit() or a fatal error in the validator, or SIGTERM.
+            $prompt->simulateTermination();
+            $afterTermination = [$prompt->terminalState, $prompt->getOutput()];
+        });
+
+        [$state, $output] = $afterTermination;
+
+        // The settings from before the prompt, not the nested ones; the cursor is visible.
+        self::assertSame('saved-state', $state);
+        self::assertStringEndsWith(static::SHOW_CURSOR, $output);
+    }
+
+    public function testNothingIsRestoredOnTerminationAfterThePrompt(): void {
+        $prompt = new TestPrompt(['a', static::ENTER]);
+        $prompt->ask('Name?');
+        $calls = $prompt->sttyCalls;
+
+        // E.g. the shutdown function after a normal exit.
+        $prompt->simulateTermination();
+
+        self::assertSame($calls, $prompt->sttyCalls);
+    }
+
+    public function testSignalsAreHandledDuringThePrompt(): void {
+        if (!function_exists('pcntl_signal')) {
+            self::markTestSkipped('pcntl is not available.');
+        }
+
+        // Off, to see it's turned on during the prompt (PHPUnit may turn it on itself).
+        $initialAsyncSignals = pcntl_async_signals(false);
+
+        try {
+            $handlers = [];
+            $prompt = new TestPrompt(['a', static::ENTER]);
+
+            $prompt->ask('Name?', static function () use (&$handlers): void {
+                // The validator is outside of the raw mode: the default handlers.
+                $handlers['validator'] = [pcntl_signal_get_handler(SIGTERM), pcntl_async_signals()];
+            });
+
+            self::assertSame([SIG_DFL, false], $handlers['validator']);
+
+            $prompt = new TestPrompt(['secret', static::ENTER]);
+            $prompt->secret('Password?', static function () use (&$handlers): void {
+                // Inside the echo-off scope.
+                $handlers['secret'] = [pcntl_signal_get_handler(SIGTERM), pcntl_signal_get_handler(SIGHUP), pcntl_async_signals()];
+            });
+
+            self::assertInstanceOf(Closure::class, $handlers['secret'][0]);
+            self::assertInstanceOf(Closure::class, $handlers['secret'][1]);
+            self::assertTrue($handlers['secret'][2]);
+
+            // Restored after the prompt.
+            self::assertSame(SIG_DFL, pcntl_signal_get_handler(SIGTERM));
+            self::assertSame(SIG_DFL, pcntl_signal_get_handler(SIGHUP));
+            self::assertFalse(pcntl_async_signals());
+        } finally {
+            pcntl_async_signals($initialAsyncSignals);
+        }
+    }
+
+    public function testAppSignalHandlersAreKept(): void {
+        if (!function_exists('pcntl_signal')) {
+            self::markTestSkipped('pcntl is not available.');
+        }
+
+        $appHandler = static function (): void {};
+        pcntl_signal(SIGTERM, $appHandler);
+
+        try {
+            $handler = null;
+            $prompt = new TestPrompt(['secret', static::ENTER]);
+            $prompt->secret('Password?', static function () use (&$handler): void {
+                $handler = pcntl_signal_get_handler(SIGTERM);
+            });
+
+            self::assertSame($appHandler, $handler);
+            self::assertSame($appHandler, pcntl_signal_get_handler(SIGTERM));
+        } finally {
+            pcntl_signal(SIGTERM, SIG_DFL);
+        }
     }
 
     public function testSecretWithoutTerminal(): void {

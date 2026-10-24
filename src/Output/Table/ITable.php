@@ -6,7 +6,9 @@ namespace Runway\Console\Output\Table;
 
 interface ITable {
     /**
-     * @param string[]   $headers
+     * The headers and the cells are formatted: escape the user data (see IOutputFormatter::escape()).
+     *
+     * @param string[]                              $headers
      * @param array<array<scalar|\Stringable|null>> $rows
      */
     public function render(array $headers, array $rows): string;

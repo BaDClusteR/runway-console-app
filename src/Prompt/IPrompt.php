@@ -10,6 +10,9 @@ use Runway\Console\Exception\PromptCancelledException;
 /**
  * Interactive questions in the terminal. The prompts are written to STDERR, so they don't mix with the command output
  * when it's redirected.
+ *
+ * The questions and the labels are formatted: escape the user data (see IOutputFormatter::escape()). The answers are
+ * shown as is.
  */
 interface IPrompt {
     /**

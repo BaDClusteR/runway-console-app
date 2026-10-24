@@ -10,11 +10,14 @@ use RuntimeException;
 
 /**
  * A prompt that reads the given key presses and writes to memory. The terminal settings are not changed: the stty
- * calls are recorded instead.
+ * calls are recorded, and the terminal state is simulated ("stty -g" returns the settings changed so far).
  */
 class TestPrompt extends Prompt {
     /** @var string[] */
     public array $sttyCalls = [];
+
+    /** The simulated terminal settings: "saved-state" initially. */
+    public string $terminalState = 'saved-state';
 
     /** @var string[][] Every drawn state of the prompt (without the formatting). */
     public array $frames = [];
@@ -78,11 +81,23 @@ class TestPrompt extends Prompt {
     }
 
     protected function getTerminalState(): ?string {
-        return $this->isRawModeAvailable ? 'saved-state' : null;
+        return $this->isRawModeAvailable ? $this->terminalState : null;
+    }
+
+    /**
+     * Like the app is terminated (e.g. by SIGTERM): the terminal is restored.
+     */
+    public function simulateTermination(): void {
+        $this->restoreTerminal();
     }
 
     protected function stty(string $arguments): ?string {
         $this->sttyCalls[] = $arguments;
+
+        // A saved state is restored as is, other settings are added to the current ones.
+        $this->terminalState = str_starts_with($arguments, "'")
+            ? trim($arguments, "'")
+            : "{$this->terminalState} {$arguments}";
 
         return '';
     }

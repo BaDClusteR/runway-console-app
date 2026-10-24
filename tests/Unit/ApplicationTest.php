@@ -62,8 +62,9 @@ class ApplicationTest extends TestCase {
 
     /**
      * @param list<ICommand> $commands
+     * @param string         $sapi     PHP_SAPI to simulate.
      */
-    protected function createApplication(array $commands, ?IEventDispatcher $eventDispatcher = null): Application {
+    protected function createApplication(array $commands, ?IEventDispatcher $eventDispatcher = null, string $sapi = 'cli'): Application {
         $envProvider = $this->createStub(IEnvVariablesProvider::class);
         $envProvider->method('getEnvVariable')->willReturnCallback(fn(string $name): mixed => $this->env[$name] ?? null);
 
@@ -77,12 +78,19 @@ class ApplicationTest extends TestCase {
             /** @var list<ICommand> */
             public array $commands = [];
 
+            public string $sapi = 'cli';
+
             protected function getCommands(): array {
                 return $this->commands;
+            }
+
+            protected function getSapi(): string {
+                return $this->sapi;
             }
         };
 
         $application->commands = $commands;
+        $application->sapi = $sapi;
 
         return $application;
     }
@@ -148,6 +156,37 @@ class ApplicationTest extends TestCase {
         self::assertStringContainsString('Available commands:', $this->output->stdout);
     }
 
+    public function testUnknownCommandNameIsEscaped(): void {
+        // The terminal title and clearing the screen.
+        self::assertSame(1, $this->runApp(["x\033]0;PWNED\007\033[2J<fg=red>"]));
+        self::assertSame("Command \"x\u{FFFD}]0;PWNED\u{FFFD}\u{FFFD}[2J<fg=red>\" not found.\n", $this->output->stderr);
+    }
+
+    public function testNotCliSapi(): void {
+        $eventDispatcher = $this->createMock(IEventDispatcher::class);
+        $eventDispatcher->expects($this->never())->method('dispatch');
+
+        // E.g. the console script is reachable by HTTP: argv could come from the query string.
+        $_SERVER['argv'] = ['console', 'greet', 'John'];
+        $application = $this->createApplication([$this->greet], $eventDispatcher, 'fpm-fcgi');
+
+        ob_start();
+        $exitCode = $application->run();
+        $output = (string)ob_get_clean();
+
+        self::assertSame(1, $exitCode);
+        self::assertSame('The console application can be run only from the command line.' . PHP_EOL, $output);
+        self::assertSame([], $this->greet->runs);
+        self::assertSame('', $this->output->stdout . $this->output->stderr);
+    }
+
+    public function testPhpdbgSapi(): void {
+        $_SERVER['argv'] = ['console', 'greet', 'John'];
+
+        self::assertSame(0, $this->createApplication([$this->greet], sapi: 'phpdbg')->run());
+        self::assertSame("Hello, friend John!\n", $this->output->stdout);
+    }
+
     public function testInvalidInput(): void {
         self::assertSame(1, $this->runApp(['greet', 'John', '--unknown']));
         self::assertSame("Unknown option: --unknown\n", $this->output->stderr);
@@ -205,6 +244,14 @@ class ApplicationTest extends TestCase {
         self::assertStringContainsString("Arguments:\n  файл  Source\n  目标  Target\n", $this->output->stdout);
     }
 
+    public function testHelpDescriptionIsPlainText(): void {
+        $command = new CallbackCommand('about', "About <fg=red>the</> app\033[2J");
+
+        $this->runApp(['help', 'about'], [$command]);
+
+        self::assertStringStartsWith("\nAbout <fg=red>the</> app\u{FFFD}[2J\n", $this->output->stdout);
+    }
+
     public function testHelpForCommandWithoutParameters(): void {
         $command = new CallbackCommand('about', 'About the app');
 
@@ -247,6 +294,22 @@ class ApplicationTest extends TestCase {
         self::assertStringStartsWith("Outer\nRuntimeException at " . __FILE__ . ':', $stderr);
         self::assertStringContainsString("\nCaused by: LogicException at " . __FILE__ . ':', $stderr);
         self::assertStringContainsString('#0 ', $stderr);
+    }
+
+    public function testTraceDoesNotShowArgumentValues(): void {
+        $this->env['APP_DEBUG'] = true;
+        $checkPassword = static fn(string $password): never => throw new RuntimeException('API is down');
+        $command = new CallbackCommand('login', handler: static fn(): int => $checkPassword('hunter2'));
+
+        self::assertSame(1, $this->runApp(['login'], [$command]));
+
+        $stderr = $this->output->stderr;
+
+        self::assertStringNotContainsString('hunter2', $stderr);
+        // The frames are still there: the closure, then the command.
+        self::assertMatchesRegularExpression('/\n#0 ' . preg_quote(__FILE__, '/') . '\(\d+\): [^\n]*\{closure[^\n]*\}\(\)\n/', $stderr);
+        self::assertStringContainsString(': Runway\Console\Tests\Support\CallbackCommand->execute()', $stderr);
+        self::assertMatchesRegularExpression('/\n#\d+ \{main\}\n$/', $stderr);
     }
 
     public function testNoTraceForConsoleExceptionsInDebugMode(): void {

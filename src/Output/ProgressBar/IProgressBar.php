@@ -17,6 +17,9 @@ interface IProgressBar {
 
     public function finish(): void;
 
+    /**
+     * The message is formatted: escape the user data, e.g. file names (see IOutputFormatter::escape()).
+     */
     public function setMessage(string $message): void;
 
     /**

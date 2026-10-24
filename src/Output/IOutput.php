@@ -7,6 +7,12 @@ namespace Runway\Console\Output;
 use Runway\Console\Output\Formatter\IOutputFormatter;
 use Runway\Console\Output\ProgressBar\IProgressBar;
 
+/**
+ * The messages (as well as the table cells, the progress bar messages, the questions and the labels of the prompts) are
+ * formatted: the tags like "<fg=green>" are applied, and the escape sequences reach the terminal as is. Escape the user
+ * data (file names, DB values, exception messages, etc.) with escape(), so it can neither change the formatting nor
+ * control the terminal.
+ */
 interface IOutput {
     public function write(string $message): void;
 

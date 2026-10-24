@@ -64,11 +64,30 @@ class OutputFormatter implements IOutputFormatter {
             '<',
             static::ESCAPED_TAG_START,
             (string)preg_replace(
-                '/[\x00-\x08\x0B-\x1F\x7F]/',
+                // C1 controls (U+0080-U+009F) too: e.g. U+009B is CSI ("\033[") for some terminals.
+                '/[\x{00}-\x{08}\x{0B}-\x{1F}\x{7F}-\x{9F}]/u',
                 static::CONTROL_CHAR_REPLACEMENT,
-                str_replace("\r\n", "\n", $text)
+                $this->replaceInvalidUtf8(str_replace("\r\n", "\n", $text))
             )
         );
+    }
+
+    /**
+     * Invalid bytes are replaced, as a raw byte can be a control too (e.g. 0x9B is CSI in the 8-bit mode).
+     */
+    protected function replaceInvalidUtf8(string $text): string {
+        if (mb_check_encoding($text, 'UTF-8')) {
+            return $text;
+        }
+
+        $substituteCharacter = mb_substitute_character();
+        mb_substitute_character(mb_ord(static::CONTROL_CHAR_REPLACEMENT));
+
+        try {
+            return mb_scrub($text, 'UTF-8');
+        } finally {
+            mb_substitute_character($substituteCharacter);
+        }
     }
 
     protected function parseTag(string $tagContent): string {

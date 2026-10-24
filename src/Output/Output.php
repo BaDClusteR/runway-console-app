@@ -22,8 +22,9 @@ class Output implements IOutput {
         protected IPrompt          $prompt,
         protected ITerminal        $terminal
     ) {
-        $this->isDecorated = $this->isStreamDecorated(STDOUT);
-        $this->isErrorDecorated = $this->isStreamDecorated(STDERR);
+        // The constants exist only in the CLI; elsewhere the app does not run (see Application::run()).
+        $this->isDecorated = defined('STDOUT') && $this->isStreamDecorated(STDOUT);
+        $this->isErrorDecorated = defined('STDERR') && $this->isStreamDecorated(STDERR);
     }
 
     /**

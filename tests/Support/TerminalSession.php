@@ -116,6 +116,16 @@ class TerminalSession {
     }
 
     /**
+     * Types without waiting for the output, e.g. while the app is busy.
+     */
+    public function type(string $text): static {
+        fwrite($this->pipes[0], $text);
+        fflush($this->pipes[0]);
+
+        return $this;
+    }
+
+    /**
      * Waits for the app to exit.
      *
      * @return int The exit code.

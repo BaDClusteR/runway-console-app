@@ -91,6 +91,20 @@ class OutputFormatterTest extends TestCase {
         );
     }
 
+    public function testEscapeReplacesC1ControlCharacters(): void {
+        // U+009B is CSI ("\033[") for some terminals; U+0085 is NEL (a line break).
+        self::assertSame("\u{FFFD}2J\u{FFFD}x\u{00A0}é", $this->formatter->escape("\u{009B}2J\u{0085}x\u{00A0}é"));
+    }
+
+    public function testEscapeReplacesInvalidUtf8(): void {
+        $substituteCharacter = mb_substitute_character();
+
+        // A raw 0x9B byte is CSI in the 8-bit mode.
+        self::assertSame("a\u{FFFD}2Jb\u{FFFD}Ж", $this->formatter->escape("a\x9B2Jb\xFFЖ"));
+        // The global setting is not changed.
+        self::assertSame($substituteCharacter, mb_substitute_character());
+    }
+
     public function testEscapeKeepsTabsAndLineBreaks(): void {
         self::assertSame("a\tb\nc\nd", $this->formatter->escape("a\tb\nc\r\nd"));
     }
