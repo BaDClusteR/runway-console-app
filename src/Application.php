@@ -20,6 +20,7 @@ use Runway\Singleton\Container;
 use Throwable;
 
 class Application extends Singleton implements IApplication {
+    /** @var list<string> */
     protected const array HELP_OPTIONS = ['--help', '-h'];
 
     public function __construct(
@@ -33,15 +34,15 @@ class Application extends Singleton implements IApplication {
     public function run(): int {
         $this->eventDispatcher->dispatch('kernel.init', null);
 
-        $argv = $_SERVER['argv'] ?? [];
+        $argv = $this->getArgv();
         $commandName = $argv[1] ?? null;
 
-        if ($commandName === null || $commandName === 'list') {
-            $this->listCommands();
-            return 0;
-        }
-
         try {
+            if ($commandName === null || $commandName === 'list') {
+                $this->listCommands();
+                return 0;
+            }
+
             if ($commandName === 'help') {
                 return $this->showHelp($argv[2] ?? null);
             }
@@ -68,6 +69,15 @@ class Application extends Singleton implements IApplication {
             $this->renderException($e);
             return 1;
         }
+    }
+
+    /**
+     * @return list<string> The script name and the arguments.
+     */
+    protected function getArgv(): array {
+        $argv = $_SERVER['argv'] ?? [];
+
+        return is_array($argv) ? array_values(array_filter($argv, is_string(...))) : [];
     }
 
     protected function renderException(Throwable $e): void {
@@ -160,12 +170,13 @@ class Application extends Singleton implements IApplication {
     }
 
     /**
-     * @param array{0: string, 1: ParameterDTO}[] $list Signature and parameter pairs.
+     * @param non-empty-list<array{string, ParameterDTO}> $list Signature and parameter pairs.
      */
     protected function writeParameterList(array $list): void {
-        $maxLength = max(
+        // In terminal columns: str_pad() counts bytes, so non-ASCII names would break the alignment.
+        $maxWidth = max(
             array_map(
-                static fn(array $item): int => mb_strlen($item[0]),
+                static fn(array $item): int => mb_strwidth($item[0]),
                 $list
             )
         );
@@ -177,8 +188,10 @@ class Application extends Singleton implements IApplication {
                 $description .= " [default: \"{$parameter->getDefault()}\"]";
             }
 
+            $padding = str_repeat(' ', $maxWidth - mb_strwidth($signature) + 2);
+
             $this->output->writeln(
-                '  <fg=cyan>' . $this->output->escape(str_pad($signature, $maxLength + 2)) . '</>'
+                '  <fg=cyan>' . $this->output->escape($signature . $padding) . '</>'
                 . $this->output->escape($description)
             );
         }
@@ -201,7 +214,7 @@ class Application extends Singleton implements IApplication {
     /**
      * @param ParameterDTO[] $parameters
      *
-     * @return ParameterDTO[]
+     * @return list<ParameterDTO>
      */
     protected function filterParameters(array $parameters, ParameterTypeEnum $type): array {
         return array_values(
@@ -213,10 +226,28 @@ class Application extends Singleton implements IApplication {
     }
 
     /**
-     * @return ICommand[]
+     * @return list<ICommand>
+     *
+     * @throws ConsoleException If a service with the tag is not a command (a configuration error).
      */
     protected function getCommands(): array {
-        return Container::getInstance()->getServicesByTag('console.command');
+        $commands = [];
+
+        foreach (Container::getInstance()->getServicesByTag('console.command') as $serviceName => $service) {
+            if (!$service instanceof ICommand) {
+                throw new ConsoleException(
+                    sprintf(
+                        'Service "%s" has the "console.command" tag, but does not implement %s.',
+                        $serviceName,
+                        ICommand::class
+                    )
+                );
+            }
+
+            $commands[] = $service;
+        }
+
+        return $commands;
     }
 
     protected function findCommand(string $name): ICommand {

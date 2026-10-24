@@ -42,6 +42,9 @@ class ProgressBarTest extends TestCase {
         return $output;
     }
 
+    /**
+     * @return non-empty-string
+     */
     protected static function line(string $counter, string $bar, string $rest): string {
         return static::REWRITE . " {$counter} [" . static::GREEN . $bar . static::RESET . "] {$rest}";
     }
@@ -151,6 +154,70 @@ class ProgressBarTest extends TestCase {
             . static::line('  0/200', '----------', '0%'),
             $output
         );
+    }
+
+    public function testPercentIsRoundedToTheClosestStep(): void {
+        $bar = $this->createBar(1000);
+
+        $output = $this->capture(static function () use ($bar): void {
+            // 1.5 steps are 2, 1.49 steps are 1.
+            $bar->advancePercent(0.15);
+            $bar->advancePercent(0.149);
+            $bar->setProgressByPercent(0.15);
+            $bar->setProgressByPercent(0.14);
+        });
+
+        self::assertSame(
+            static::line('   2/1000', '----------', '0%')
+            . static::line('   3/1000', '----------', '0%')
+            . static::line('   2/1000', '----------', '0%')
+            . static::line('   1/1000', '----------', '0%'),
+            $output
+        );
+    }
+
+    public function testBarWithoutRoomForTheMessage(): void {
+        // " 1/2 [====>-----] 50%" takes exactly the 21 usable columns.
+        $this->terminal->width = 22;
+        $bar = $this->createBar(2);
+        $bar->setMessage('message');
+
+        self::assertSame(static::line('1/2', '====>-----', '50%'), $this->capture(static fn() => $bar->advance()));
+    }
+
+    public function testMessageCutToOneColumn(): void {
+        $this->terminal->width = 23;
+        $bar = $this->createBar(2);
+        $bar->setMessage('message');
+
+        self::assertSame(static::line('1/2', '====>-----', '50%…'), $this->capture(static fn() => $bar->advance()));
+    }
+
+    public function testTerminalWidthIsCheckedAgainAfterOneSecond(): void {
+        $bar = new class(new OutputFormatter(), $this->terminal, 10, 10, true) extends ProgressBar {
+            public float $time = 1000.0;
+
+            protected function now(): float {
+                return $this->time;
+            }
+        };
+        $bar->setMessage('a long message');
+
+        $output = $this->capture(function () use ($bar): void {
+            $bar->advance();
+            $this->terminal->width = 30;
+
+            $bar->time = 1000.99;
+            $bar->advance();
+
+            // Exactly one second.
+            $bar->time = 1001.0;
+            $bar->advance();
+        });
+
+        self::assertSame(2, $this->terminal->calls);
+        self::assertStringEndsWith(static::line(' 3/10', '==>-------', '30% a lo…'), $output);
+        self::assertStringContainsString(static::line(' 2/10', '=>--------', '20% a long message'), $output);
     }
 
     public function testZeroMax(): void {

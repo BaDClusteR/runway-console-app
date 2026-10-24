@@ -1,0 +1,5 @@
+services:
+  Runway\Console\Tests\Integration\Fixture\NotACommand:
+    class: Runway\Console\Tests\Integration\Fixture\NotACommand
+    tags:
+      - name: console.command

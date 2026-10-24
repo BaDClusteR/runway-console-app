@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Runway\Console\Tests\Support;
 
 use php_user_filter;
+use RuntimeException;
 
 /**
  * Captures what is written to STDERR (and keeps it out of the test runner output) with a stream filter.
@@ -23,7 +24,8 @@ class StderrCapture extends php_user_filter {
         }
 
         static::$buffer = '';
-        static::$filter = stream_filter_append(STDERR, static::FILTER_NAME, STREAM_FILTER_WRITE);
+        static::$filter = stream_filter_append(STDERR, static::FILTER_NAME, STREAM_FILTER_WRITE)
+            ?: throw new RuntimeException('STDERR cannot be captured.');
     }
 
     /**

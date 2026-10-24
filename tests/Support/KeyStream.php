@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Runway\Console\Tests\Support;
 
+use RuntimeException;
+
 /**
  * An input stream that returns one chunk per read, like a terminal in the raw mode returns one key press (or one
  * pasted text). The end of the chunks is the end of the input.
@@ -29,7 +31,7 @@ class KeyStream {
 
         static::$chunks = $chunks;
 
-        return fopen(static::PROTOCOL . '://input', 'r');
+        return fopen(static::PROTOCOL . '://input', 'r') ?: throw new RuntimeException('The key stream cannot be opened.');
     }
 
     public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool {

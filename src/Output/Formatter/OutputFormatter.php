@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Runway\Console\Output\Formatter;
 
 class OutputFormatter implements IOutputFormatter {
+    /** @var array<string, string> */
     protected const array FG_COLORS = [
         'black'   => '30',
         'red'     => '31',
@@ -17,6 +18,7 @@ class OutputFormatter implements IOutputFormatter {
         'default' => '39',
     ];
 
+    /** @var array<string, string> */
     protected const array BG_COLORS = [
         'black'   => '40',
         'red'     => '41',
@@ -29,6 +31,7 @@ class OutputFormatter implements IOutputFormatter {
         'default' => '49',
     ];
 
+    /** @var array<string, string> */
     protected const array OPTIONS = [
         'bold'       => '1',
         'dim'        => '2',
@@ -36,6 +39,7 @@ class OutputFormatter implements IOutputFormatter {
         'reverse'    => '7',
     ];
 
+    /** @var non-empty-string */
     protected const string ESCAPED_TAG_START = '\\<';
 
     protected const string CONTROL_CHAR_REPLACEMENT = "\u{FFFD}";

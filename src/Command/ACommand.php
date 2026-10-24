@@ -43,7 +43,7 @@ abstract class ACommand implements ICommand {
             $this->configure();
         }
 
-        return $this->parameters;
+        return $this->parameters ?? [];
     }
 
     protected function addArgument(

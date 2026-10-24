@@ -28,8 +28,7 @@ class ApplicationTest extends TestCase {
     /** @var array<string, mixed> */
     protected array $env = [];
 
-    /** @var string[]|null */
-    protected ?array $originalArgv;
+    protected mixed $originalArgv;
 
     protected function setUp(): void {
         $this->originalArgv = $_SERVER['argv'] ?? null;
@@ -62,7 +61,7 @@ class ApplicationTest extends TestCase {
     }
 
     /**
-     * @param ICommand[] $commands
+     * @param list<ICommand> $commands
      */
     protected function createApplication(array $commands, ?IEventDispatcher $eventDispatcher = null): Application {
         $envProvider = $this->createStub(IEnvVariablesProvider::class);
@@ -75,7 +74,7 @@ class ApplicationTest extends TestCase {
             $envProvider,
             new CommandListRenderer($this->output)
         ) extends Application {
-            /** @var ICommand[] */
+            /** @var list<ICommand> */
             public array $commands = [];
 
             protected function getCommands(): array {
@@ -89,8 +88,8 @@ class ApplicationTest extends TestCase {
     }
 
     /**
-     * @param string[]   $arguments The arguments after the script name.
-     * @param ICommand[] $commands
+     * @param list<string>        $arguments The arguments after the script name.
+     * @param list<ICommand>|null $commands
      */
     protected function runApp(array $arguments, ?array $commands = null): int {
         $_SERVER['argv'] = ['console', ...$arguments];
@@ -121,6 +120,20 @@ class ApplicationTest extends TestCase {
         self::assertSame("HI, FRIEND JOHN!\n", $this->output->stdout);
         self::assertSame('', $this->output->stderr);
         self::assertCount(1, $this->greet->runs);
+    }
+
+    public function testNonStringArgvItemsAreIgnored(): void {
+        $_SERVER['argv'] = ['console', 42, 'greet', ['x'], 'John'];
+
+        self::assertSame(0, $this->createApplication([$this->greet])->run());
+        self::assertSame("Hello, friend John!\n", $this->output->stdout);
+    }
+
+    public function testNoArgv(): void {
+        $_SERVER['argv'] = 'not an array';
+
+        self::assertSame(0, $this->createApplication([$this->greet])->run());
+        self::assertStringContainsString('Available commands:', $this->output->stdout);
     }
 
     public function testCommandExitCodeIsReturned(): void {
@@ -169,6 +182,27 @@ class ApplicationTest extends TestCase {
         }
 
         self::assertSame([], $this->greet->runs, 'The command is not run for the help.');
+    }
+
+    public function testCommandHelpFormatting(): void {
+        $this->runApp(['help', 'greet']);
+
+        self::assertStringContainsString(
+            "<fg=green>Arguments:</>\n  <fg=cyan>name   </>Who to greet\n",
+            $this->output->rawStdout
+        );
+        self::assertStringContainsString("\n  <fg=cyan>-s, --shout           </>Uppercase\n", $this->output->rawStdout);
+    }
+
+    public function testHelpIsAlignedForNonAsciiNames(): void {
+        $command = (new CallbackCommand('copy', 'Copies a file'))
+            ->withArgument('файл', description: 'Source')
+            ->withArgument('目标', description: 'Target');
+
+        $this->runApp(['help', 'copy'], [$command]);
+
+        // Wide characters take two columns.
+        self::assertStringContainsString("Arguments:\n  файл  Source\n  目标  Target\n", $this->output->stdout);
     }
 
     public function testHelpForCommandWithoutParameters(): void {

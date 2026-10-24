@@ -16,6 +16,7 @@ class InputParser implements IInputParser {
         $optionDefs = $this->filterByType($parameterDTOs, ParameterTypeEnum::OPTION);
         $argumentDefs = $this->filterByType($parameterDTOs, ParameterTypeEnum::ARGUMENT);
 
+        /** @var array<string, string|null> $parsedOptions */
         $parsedOptions = [];
         $positionalTokens = [];
 
@@ -59,7 +60,7 @@ class InputParser implements IInputParser {
 
     /**
      * @param ParameterDTO[] $defs
-     * @return ParameterDTO[]
+     * @return list<ParameterDTO>
      */
     protected function filterByType(array $defs, ParameterTypeEnum $type): array {
         return array_values(
@@ -70,6 +71,11 @@ class InputParser implements IInputParser {
         );
     }
 
+    /**
+     * @param list<string>               $tokens
+     * @param ParameterDTO[]             $optionDefs
+     * @param array<string, string|null> $parsedOptions
+     */
     protected function parseLongOption(
         string $token,
         array  $tokens,
@@ -105,6 +111,8 @@ class InputParser implements IInputParser {
 
     /**
      * Reads the option value from the next token, if the option accepts a value.
+     *
+     * @param list<string> $tokens
      */
     protected function readOptionValue(ParameterDTO $def, string $displayName, array $tokens, int &$i): string {
         if ($def->getMode() === ParameterModeEnum::VALUE_NONE) {
@@ -128,6 +136,11 @@ class InputParser implements IInputParser {
         return '';
     }
 
+    /**
+     * @param list<string>               $tokens
+     * @param ParameterDTO[]             $optionDefs
+     * @param array<string, string|null> $parsedOptions
+     */
     protected function parseShortOption(
         string $token,
         array  $tokens,

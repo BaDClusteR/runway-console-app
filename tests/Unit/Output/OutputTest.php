@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Runway\Console\Tests\Unit\Output;
 
 use PHPUnit\Framework\TestCase;
+use Runway\Console\Output\Formatter\IOutputFormatter;
 use Runway\Console\Output\Formatter\OutputFormatter;
 use Runway\Console\Output\Output;
+use Runway\Console\Output\Table\ITable;
 use Runway\Console\Output\Table\Table;
 use Runway\Console\Prompt\IPrompt;
+use Runway\Console\Terminal\ITerminal;
 use Runway\Console\Tests\Support\FixedWidthTerminal;
 use Runway\Console\Tests\Support\StderrCapture;
 
@@ -31,7 +34,7 @@ class OutputTest extends TestCase {
         $formatter = new OutputFormatter();
 
         return new class($formatter, new Table($formatter), $prompt ?? $this->createStub(IPrompt::class), new FixedWidthTerminal(), $isDecorated) extends Output {
-            public function __construct($formatter, $table, $prompt, $terminal, bool $isDecorated) {
+            public function __construct(IOutputFormatter $formatter, ITable $table, IPrompt $prompt, ITerminal $terminal, bool $isDecorated) {
                 parent::__construct($formatter, $table, $prompt, $terminal);
 
                 $this->isDecorated = $isDecorated;
@@ -47,7 +50,7 @@ class OutputTest extends TestCase {
     /**
      * @param callable(): void $action
      *
-     * @return array{string, string} STDOUT and STDERR.
+     * @return array{string, string} STDOUT and STDERR, the lines end with "\n" on every platform.
      */
     protected function capture(callable $action): array {
         ob_start();
@@ -60,7 +63,7 @@ class OutputTest extends TestCase {
             $stdout = (string)ob_get_clean();
         }
 
-        return [$stdout, $stderr];
+        return [str_replace(PHP_EOL, "\n", $stdout), str_replace(PHP_EOL, "\n", $stderr)];
     }
 
     public function testWriteFormatsForTerminal(): void {
@@ -71,7 +74,7 @@ class OutputTest extends TestCase {
             $output->writeln(' b');
         });
 
-        self::assertSame("\033[32ma\033[0m b" . PHP_EOL, $stdout);
+        self::assertSame("\033[32ma\033[0m b\n", $stdout);
         self::assertSame('', $stderr);
     }
 
@@ -146,7 +149,7 @@ class OutputTest extends TestCase {
         });
 
         // Without a terminal, only the final state.
-        self::assertSame(' 2/2 [============================] 100%' . PHP_EOL, $stdout);
+        self::assertSame(" 2/2 [============================] 100%\n", $stdout);
     }
 
     public function testPromptsAreDelegated(): void {
@@ -164,6 +167,13 @@ class OutputTest extends TestCase {
         self::assertSame('Alice', $output->ask('Name?', default: 'Bob'));
         self::assertSame('secret', $output->secret('Password?'));
         self::assertTrue($output->isInteractive());
+    }
+
+    public function testConfirmDefaults(): void {
+        $prompt = $this->createMock(IPrompt::class);
+        $prompt->expects($this->once())->method('confirm')->with('Sure?', false, 'Yes', 'No')->willReturn(false);
+
+        self::assertFalse($this->createOutput(false, $prompt)->confirm('Sure?'));
     }
 
     public function testNoColorDisablesDecoration(): void {

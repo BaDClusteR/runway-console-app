@@ -32,7 +32,7 @@ interface IOutput {
 
     /**
      * @param string[]   $headers
-     * @param string[][] $rows
+     * @param array<array<scalar|\Stringable|null>> $rows
      */
     public function table(array $headers, array $rows): void;
 

@@ -7,7 +7,7 @@ namespace Runway\Console\Output\Table;
 interface ITable {
     /**
      * @param string[]   $headers
-     * @param string[][] $rows
+     * @param array<array<scalar|\Stringable|null>> $rows
      */
     public function render(array $headers, array $rows): string;
 }

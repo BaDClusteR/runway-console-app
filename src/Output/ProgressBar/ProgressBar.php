@@ -121,9 +121,12 @@ class ProgressBar implements IProgressBar {
             return $line . $message;
         }
 
-        return ($lineWidth < $width)
-            ? $line . $this->cut($message, $width - $lineWidth)
-            : $this->cut($line . $message, $width);
+        if ($lineWidth < $width) {
+            return $line . $this->cut($message, $width - $lineWidth);
+        }
+
+        // No room for the message at all.
+        return ($lineWidth === $width) ? $line : $this->cut($line, $width);
     }
 
     /**
@@ -140,7 +143,7 @@ class ProgressBar implements IProgressBar {
     }
 
     protected function getTerminalWidth(): int {
-        $now = microtime(true);
+        $now = $this->now();
 
         if ($this->terminalWidth === null || $now - $this->terminalWidthCheckedAt >= static::TERMINAL_WIDTH_TTL) {
             $this->terminalWidth = $this->terminal->getWidth();
@@ -148,6 +151,13 @@ class ProgressBar implements IProgressBar {
         }
 
         return $this->terminalWidth;
+    }
+
+    /**
+     * Seconds, e.g. 1700000000.25.
+     */
+    protected function now(): float {
+        return microtime(true);
     }
 
     protected function buildCounter(): string {

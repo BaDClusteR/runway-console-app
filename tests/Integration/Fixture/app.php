@@ -4,7 +4,8 @@
  * A console app like in a real project: the real DI container with the library config and the fixture commands.
  *
  * Environment variables:
- *   FIXTURE_ENV_FILE  An env file to load (e.g. debug.env for the debug mode).
+ *   FIXTURE_ENV_FILE        An env file to load (e.g. debug.env for the debug mode).
+ *   FIXTURE_INVALID_CONFIG  "1" adds a service with the command tag that is not a command (see config-invalid).
  */
 
 declare(strict_types=1);
@@ -20,37 +21,44 @@ require dirname(__DIR__, 3) . '/vendor/autoload.php';
  * see .gitignore), so the tests do not depend on the developer's setup.
  */
 function getLibraryConfigDirectory(): string {
-    $directory = sys_get_temp_dir() . '/runway-console-tests-config-' . getmypid();
+    // A new directory with an unpredictable name: an existing one could contain someone else's config.
+    $directory = sys_get_temp_dir() . '/runway-console-tests-config-' . bin2hex(random_bytes(8));
 
-    if (!is_dir($directory)) {
-        mkdir($directory, 0700, true);
+    if (!mkdir($directory, 0700)) {
+        throw new RuntimeException("Cannot create {$directory}.");
     }
 
-    foreach (glob(CONSOLE_CONFIG_ROOT . '/*.yaml') as $file) {
+    foreach (glob(CONSOLE_CONFIG_ROOT . '/*.yaml') ?: [] as $file) {
         if (basename($file) !== 'dev.yaml') {
             copy($file, $directory . '/' . basename($file));
         }
     }
 
     register_shutdown_function(static function () use ($directory): void {
-        array_map(unlink(...), glob($directory . '/*.yaml'));
+        array_map(unlink(...), glob($directory . '/*.yaml') ?: []);
         rmdir($directory);
     });
 
     return $directory;
 }
 
-$configDirectories = new ReflectionProperty(PathsProvider::class, 'configDirectories');
-$configDirectories->setValue(
+/** @var string[] $directories */
+$directories = (new ReflectionProperty(PathsProvider::class, 'configDirectories'))->getValue();
+
+(new ReflectionProperty(PathsProvider::class, 'configDirectories'))->setValue(
     null,
     array_map(
         static fn(string $directory): string => ($directory === CONSOLE_CONFIG_ROOT) ? getLibraryConfigDirectory() : $directory,
-        $configDirectories->getValue()
+        $directories
     )
 );
 
 $pathsProvider = PathsProvider::getInstance();
 $pathsProvider->addConfigDirectory(__DIR__ . '/config');
+
+if (getenv('FIXTURE_INVALID_CONFIG') === '1') {
+    $pathsProvider->addConfigDirectory(__DIR__ . '/config-invalid');
+}
 
 $envFile = getenv('FIXTURE_ENV_FILE');
 
@@ -58,4 +66,10 @@ if ($envFile !== false && $envFile !== '') {
     $pathsProvider->addEnvFilePath($envFile);
 }
 
-exit(Container::getInstance()->getService(IApplication::class)->run());
+$application = Container::getInstance()->getService(IApplication::class);
+
+if (!$application instanceof IApplication) {
+    throw new RuntimeException('The application service is not an application.');
+}
+
+exit($application->run());

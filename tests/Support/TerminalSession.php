@@ -14,6 +14,7 @@ use RuntimeException;
 class TerminalSession {
     protected const float TIMEOUT = 5.0;
 
+    /** @var non-empty-string */
     protected const string SETTINGS_MARKER = '<<<TERMINAL SETTINGS>>>';
 
     /** @var resource */
@@ -27,7 +28,7 @@ class TerminalSession {
     protected ?int $exitCode = null;
 
     /**
-     * @param string[]              $arguments
+     * @param list<string>          $arguments
      * @param array<string, string> $env Added to the current environment.
      */
     public function __construct(
@@ -72,7 +73,7 @@ class TerminalSession {
     }
 
     /**
-     * @return string[]
+     * @return list<string>
      */
     protected static function getScriptCommand(string $shellCommand): array {
         // BSD (macOS) and util-linux versions of "script" have different arguments.
@@ -156,7 +157,7 @@ class TerminalSession {
 
         $settings = explode(static::SETTINGS_MARKER, $this->output)[1] ?? '';
 
-        return preg_split('/[\s;]+/', $settings, -1, PREG_SPLIT_NO_EMPTY);
+        return preg_split('/[\s;]+/', $settings, -1, PREG_SPLIT_NO_EMPTY) ?: [];
     }
 
     /**

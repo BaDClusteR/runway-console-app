@@ -5,19 +5,24 @@ declare(strict_types=1);
 namespace Runway\Console\Output\Table;
 
 use Runway\Console\Output\Formatter\IOutputFormatter;
+use Stringable;
 
 class Table implements ITable {
     protected const string HORIZONTAL = '─';
 
     protected const string VERTICAL = '│';
 
-    /** Left, middle and right junctions of the top border. */
+    /**
+     * Left, middle and right junctions of the top border.
+     *
+     * @var array{string, string, string}
+     */
     protected const array TOP = ['┌', '┬', '┐'];
 
-    /** The same for the line between the header and the rows. */
+    /** @var array{string, string, string} The same for the line between the header and the rows. */
     protected const array MIDDLE = ['├', '┼', '┤'];
 
-    /** The same for the bottom border. */
+    /** @var array{string, string, string} The same for the bottom border. */
     protected const array BOTTOM = ['└', '┴', '┘'];
 
     public function __construct(
@@ -45,8 +50,9 @@ class Table implements ITable {
     }
 
     /**
-     * @param string[]   $headers
-     * @param string[][] $rows
+     * @param string[]                             $headers
+     * @param array<array<scalar|Stringable|null>> $rows
+     *
      * @return int[]
      */
     protected function calculateColumnWidths(array $headers, array $rows): array {
@@ -69,8 +75,8 @@ class Table implements ITable {
     }
 
     /**
-     * @param int[]    $columnWidths
-     * @param string[] $junctions Left, middle and right junctions (see TOP, MIDDLE, BOTTOM).
+     * @param int[]                         $columnWidths
+     * @param array{string, string, string} $junctions Left, middle and right junctions (see TOP, MIDDLE, BOTTOM).
      */
     protected function buildSeparator(array $columnWidths, array $junctions): string {
         [$left, $middle, $right] = $junctions;
@@ -84,8 +90,8 @@ class Table implements ITable {
     }
 
     /**
-     * @param string[] $row
-     * @param int[]    $columnWidths
+     * @param array<scalar|Stringable|null> $row
+     * @param int[]                         $columnWidths
      */
     protected function buildRow(array $row, array $columnWidths): string {
         $cells = [];
@@ -102,7 +108,7 @@ class Table implements ITable {
     /**
      * Line breaks would break the table layout, so they are replaced with spaces.
      */
-    protected function getCellText(mixed $cell): string {
+    protected function getCellText(string|int|float|bool|Stringable|null $cell): string {
         return (string)preg_replace('/\R/u', ' ', (string)$cell);
     }
 

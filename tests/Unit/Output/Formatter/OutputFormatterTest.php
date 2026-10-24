@@ -28,6 +28,7 @@ class OutputFormatterTest extends TestCase {
         yield 'a tag without known values is removed' => ['<fg=pink>x</>', "x\033[0m"];
         yield 'nested tags' => ['<fg=red>a <options=bold>b</> c</>', "\033[31ma \033[1mb\033[0m c\033[0m"];
         yield 'not a tag' => ['a <b> c <fg=RED>d', 'a <b> c <fg=RED>d'];
+        yield 'colors are not options' => ['<options=red;bg=bold>x</>', "x\033[0m"];
         yield 'an incomplete tag' => ['<fg=red', '<fg=red'];
         yield 'no tags' => ['plain text', 'plain text'];
     }

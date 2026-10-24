@@ -13,11 +13,14 @@ use Runway\Console\Output\ProgressBar\ProgressBar;
 use Runway\Console\Output\Table\Table;
 
 /**
- * Collects the output (without the formatting) instead of writing it: STDOUT and STDERR separately. Prompts are not
- * expected in the tests that use it.
+ * Collects the output (without the formatting) instead of writing it: STDOUT and STDERR separately. The lines end with
+ * "\n" on every platform. Prompts are not expected in the tests that use it.
  */
 class BufferedOutput implements IOutput {
     public string $stdout = '';
+
+    /** STDOUT with the formatting tags, as written. */
+    public string $rawStdout = '';
 
     public string $stderr = '';
 
@@ -26,6 +29,9 @@ class BufferedOutput implements IOutput {
     ) {}
 
     public function write(string $message): void {
+        $message = str_replace(PHP_EOL, "\n", $message);
+
+        $this->rawStdout .= $message;
         $this->stdout .= $this->formatter->format($message, false);
     }
 
@@ -46,7 +52,7 @@ class BufferedOutput implements IOutput {
     }
 
     public function writeErrorLine(string $message): void {
-        $this->stderr .= $this->formatter->format($message . PHP_EOL, false);
+        $this->stderr .= $this->formatter->format($message . "\n", false);
     }
 
     public function info(string $message): void {

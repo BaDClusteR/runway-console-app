@@ -14,6 +14,9 @@ use Runway\Console\Parameter\Enum\ParameterTypeEnum;
 use Runway\Console\Tests\Support\BufferedOutput;
 
 class ACommandTest extends TestCase {
+    /**
+     * @return ACommand&object{configureCalls: int}
+     */
     protected function createCommand(): ACommand {
         return new class extends ACommand {
             public int $configureCalls = 0;

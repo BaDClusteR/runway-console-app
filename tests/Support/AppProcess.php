@@ -20,12 +20,12 @@ readonly class AppProcess {
     ) {}
 
     /**
-     * @param string[]              $arguments
+     * @param list<string>          $arguments
      * @param array<string, string> $env Added to the current environment.
      */
-    public static function run(array $arguments, array $env = [], string $stdin = ''): static {
+    public static function run(array $arguments, array $env = [], string $stdin = ''): self {
         $process = proc_open(
-            [PHP_BINARY, static::APP, ...$arguments],
+            [PHP_BINARY, self::APP, ...$arguments],
             [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
             $pipes,
             null,
@@ -46,6 +46,7 @@ readonly class AppProcess {
         fclose($pipes[1]);
         fclose($pipes[2]);
 
-        return new static(proc_close($process), $stdout, $stderr);
+        // The lines end with "\n" on every platform.
+        return new self(proc_close($process), str_replace(PHP_EOL, "\n", $stdout), str_replace(PHP_EOL, "\n", $stderr));
     }
 }

@@ -13,7 +13,8 @@ class Terminal implements ITerminal {
     protected const string DEVICE = '/dev/tty';
 
     public function getWidth(): int {
-        $size = function_exists('shell_exec')
+        // No device on Windows: the shell would print an error there.
+        $size = (function_exists('shell_exec') && is_readable(static::DEVICE))
             // Errors are suppressed first: without a controlling terminal, even opening the device fails.
             ? trim((string)shell_exec('stty size 2>/dev/null < ' . static::DEVICE))
             : '';

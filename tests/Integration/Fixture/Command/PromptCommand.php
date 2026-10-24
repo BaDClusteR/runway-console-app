@@ -6,6 +6,7 @@ namespace Runway\Console\Tests\Integration\Fixture\Command;
 
 use Runway\Console\Command\ACommand;
 use Runway\Console\Exception\InvalidAnswerException;
+use Runway\Console\Exception\InvalidParameterException;
 use Runway\Console\Input\IInput;
 use Runway\Console\Output\IOutput;
 use Runway\Console\Parameter\Enum\ParameterModeEnum;
@@ -43,6 +44,7 @@ class PromptCommand extends ACommand {
                 return $answer;
             }, $default),
             'secret'  => $output->secret('Password?'),
+            default   => throw new InvalidParameterException('Unknown prompt type.'),
         };
 
         $output->writeln('Answer: ' . $output->escape(var_export($answer, true)));

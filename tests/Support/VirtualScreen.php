@@ -25,7 +25,7 @@ class VirtualScreen {
      * @return string[] The screen lines, without the trailing spaces.
      */
     public static function render(string $output, int $width = 1000): array {
-        $screen = new static($width);
+        $screen = new self($width);
         $screen->write($output);
 
         return $screen->getLines();
@@ -44,7 +44,7 @@ class VirtualScreen {
                 $this->row++;
                 $this->column = 0;
             } elseif (isset($match[2])) {
-                $this->handleSequence($match[1], $match[2]);
+                $this->handleSequence($match[1] ?? '', $match[2]);
             } elseif (!str_starts_with($token, "\033")) {
                 $this->writeCharacter($token);
             }

@@ -35,7 +35,7 @@ class Prompt implements IPrompt {
     /** Ctrl+U. */
     protected const string CLEAR_KEY = "\x15";
 
-    /** A pasted text comes as one read, so it's bigger than a key sequence. */
+    /** @var positive-int A pasted text comes as one read, so it's bigger than a key sequence. */
     protected const int READ_SIZE = 1024;
 
     protected const int MAX_VISIBLE_CHOICES = 10;
@@ -218,6 +218,8 @@ class Prompt implements IPrompt {
     }
 
     /**
+     * @param array<int|string, string> $choices
+     *
      * @return int The index of the chosen item.
      *
      * @throws PromptCancelledException
@@ -315,7 +317,7 @@ class Prompt implements IPrompt {
 
             $incompleteBytes = '';
             // A pasted text with a line break: the first line is the answer.
-            $lines = preg_split('/\r\n|\r|\n/', $text);
+            $lines = preg_split('/\r\n|\r|\n/', $text) ?: [$text];
             $value .= preg_replace('/[\x00-\x1F\x7F]/', '', $lines[0]);
 
             if (count($lines) > 1) {
@@ -466,7 +468,7 @@ class Prompt implements IPrompt {
             $this->pendingKeys = ($chunk === false || $chunk === '') ? [''] : $this->splitKeys($chunk);
         }
 
-        $key = array_shift($this->pendingKeys);
+        $key = array_shift($this->pendingKeys) ?? '';
 
         if ($key === '' || in_array($key, static::CANCEL_KEYS, true)) {
             $this->clearRendered();
@@ -519,6 +521,8 @@ class Prompt implements IPrompt {
     }
 
     /**
+     * @param array<int|string, string> $choices
+     *
      * @return int The index of the chosen item.
      *
      * @throws PromptCancelledException

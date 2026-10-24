@@ -148,6 +148,18 @@ class ApplicationProcessTest extends TestCase {
         }
     }
 
+    public function testServiceWithCommandTagThatIsNotCommand(): void {
+        $expectedError = ' Service "Runway\Console\Tests\Integration\Fixture\NotACommand" has the "console.command" tag,'
+            . " but does not implement Runway\Console\Command\ICommand. \n";
+
+        // The configuration error is shown instead of a fatal error, for the list too.
+        foreach ([[], ['greet', 'John']] as $arguments) {
+            $result = AppProcess::run($arguments, ['FIXTURE_INVALID_CONFIG' => '1']);
+
+            self::assertSame([1, '', $expectedError], [$result->exitCode, $result->stdout, $result->stderr]);
+        }
+    }
+
     public function testDefaultAnswerIsValidated(): void {
         $result = AppProcess::run(['demo:prompt', 'ask', '--default=']);
 

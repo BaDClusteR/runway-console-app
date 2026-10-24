@@ -37,8 +37,10 @@ class PromptTest extends TestCase {
 
     protected const string RAW_MODE = '-icanon -echo -isig min 1';
 
+    /** @var non-empty-string */
     protected const string HIDE_CURSOR = "\033[?25l";
 
+    /** @var non-empty-string */
     protected const string SHOW_CURSOR = "\033[?25h";
 
     /**
@@ -185,6 +187,7 @@ class PromptTest extends TestCase {
 
     // Choice.
 
+    /** @var array<string, string> */
     protected const array FRUITS = ['apple' => 'Apple', 'banana' => 'Banana', 'cherry' => 'Cherry'];
 
     /**
@@ -452,6 +455,116 @@ class PromptTest extends TestCase {
         $prompt->secret('Password?');
     }
 
+    // Layout.
+
+    public function testRedrawingKeepsThePreviousOutput(): void {
+        $prompt = new TestPrompt([static::DOWN, static::DOWN, static::ENTER]);
+        $prompt->writeOutput("Line 1\nLine 2\n");
+
+        $prompt->choice('Fruit?', static::FRUITS);
+
+        self::assertSame(['Line 1', 'Line 2', '? Fruit? Cherry'], $prompt->getScreen());
+    }
+
+    public function testLineThatTakesTheWholeWidthStillFits(): void {
+        // "? Continue? [Yes]  No " is 22 columns: the last terminal column is not used.
+        $prompt = new TestPrompt([static::ENTER], terminalWidth: 23);
+        $prompt->confirm('Continue?', true);
+        self::assertSame([['? Continue? [Yes]  No ']], $prompt->frames);
+
+        $prompt = new TestPrompt([static::ENTER], terminalWidth: 22);
+        $prompt->confirm('Continue?', true);
+        self::assertSame([['? Continue?', '  [Yes]  No ']], $prompt->frames);
+    }
+
+    public function testAskInputGoesToTheNextLineIfTheDefaultTakesTheLine(): void {
+        // The question alone fits, but not with the default.
+        $prompt = new TestPrompt([static::ENTER], terminalWidth: 30);
+        $prompt->ask('Name?', default: 'Very long default name');
+
+        self::assertSame(['? Name?', '❯ (Very long default name) _'], $prompt->frames[0]);
+
+        // The question with the default fits, but there is no room to type.
+        $prompt = new TestPrompt([static::ENTER], terminalWidth: 40);
+        $prompt->ask('Name?', default: 'Very long default name');
+
+        self::assertSame(['? Name?', '❯ (Very long default name) _'], $prompt->frames[0]);
+    }
+
+    public function testAskShowsTheWholeAnswerThatFits(): void {
+        // 30 columns: "? Name? " and the cursor, the last column is not used.
+        $prompt = new TestPrompt([str_repeat('a', 20), static::ENTER], terminalWidth: 30);
+        $prompt->ask('Name?');
+
+        self::assertSame(['? Name? ' . str_repeat('a', 20) . '_'], $prompt->getLastFrame());
+    }
+
+    public function testAskShowsTheEndOfLongMultibyteAnswer(): void {
+        $prompt = new TestPrompt([str_repeat('я', 25) . 'КОНЕЦ', static::ENTER], terminalWidth: 30);
+        $prompt->ask('Name?');
+
+        self::assertSame(['? Name? …' . str_repeat('я', 14) . 'КОНЕЦ_'], $prompt->getLastFrame());
+    }
+
+    public function testAskShowsTheEndOfLongWideAnswer(): void {
+        $prompt = new TestPrompt([str_repeat('世', 20), static::ENTER], terminalWidth: 30);
+        $prompt->ask('Name?');
+
+        // 9 wide characters (18 columns) and "…" fit 20 columns.
+        self::assertSame(['? Name? …' . str_repeat('世', 9) . '_'], $prompt->getLastFrame());
+    }
+
+    public function testChoiceNumberOne(): void {
+        $prompt = new TestPrompt(['1', static::ENTER]);
+
+        self::assertSame('apple', $prompt->choice('Fruit?', static::FRUITS, 'banana'));
+    }
+
+    public function testConfirmNonAsciiLabels(): void {
+        self::assertTrue((new TestPrompt(['Д']))->confirm('Продолжить?', false, 'Да', 'Нет'));
+        self::assertFalse((new TestPrompt(['н']))->confirm('Продолжить?', true, 'Да', 'Нет'));
+        self::assertFalse((new TestPrompt(['Н']))->confirm('Продолжить?', true, 'Да', 'Нет'));
+    }
+
+    public function testConfirmNonAsciiLabelsWithoutRawMode(): void {
+        $prompt = new TestPrompt(["ДА\n", "нет\n"], isRawModeAvailable: false);
+
+        self::assertTrue($prompt->confirm('Продолжить?', false, 'Да', 'Нет'));
+        self::assertFalse($prompt->confirm('Продолжить?', true, 'Да', 'Нет'));
+        self::assertStringStartsWith('? Продолжить? (да/Нет) ', $prompt->getOutput());
+        self::assertStringContainsString('? Продолжить? (Да/нет) ', $prompt->getOutput());
+    }
+
+    public function testChoiceWithoutRawModeShowsTheDefaultNumber(): void {
+        $prompt = new TestPrompt(["\n"], isRawModeAvailable: false);
+        $prompt->choice('Fruit?', static::FRUITS, 'cherry');
+
+        self::assertStringEndsWith("\n  Number [3]: ? Fruit? Cherry\n", $prompt->getOutput());
+
+        $prompt = new TestPrompt(["1\n"], isRawModeAvailable: false);
+        $prompt->choice('Fruit?', static::FRUITS);
+
+        self::assertStringEndsWith("\n  Number: ? Fruit? Apple\n", $prompt->getOutput());
+    }
+
+    public function testChoiceWithoutRawModeAcceptsOnlyItemNumbers(): void {
+        $prompt = new TestPrompt(["0\n", "1.5\n", "-1\n", "4\n", "3\n"], isRawModeAvailable: false);
+
+        self::assertSame('cherry', $prompt->choice('Fruit?', static::FRUITS));
+        self::assertSame(5, substr_count($prompt->getOutput(), 'Number: '));
+    }
+
+    public function testEndOfInputWithoutRawModeEndsTheLine(): void {
+        $prompt = new TestPrompt([], isRawModeAvailable: false);
+
+        try {
+            $prompt->ask('Name?');
+        } catch (PromptCancelledException) {
+        }
+
+        self::assertSame("? Name? \n", $prompt->getOutput());
+    }
+
     // Several keys in one read (fast typing, a held key).
 
     public function testAskKeysInOneRead(): void {
@@ -504,6 +617,13 @@ class PromptTest extends TestCase {
 
         self::assertStringContainsString("\033[32m?\033[0m Continue? \033[1;7;36m Yes \033[0m \033[2m No \033[0m", $prompt->getOutput());
         self::assertSame(['? Continue? Yes'], $prompt->getScreen());
+    }
+
+    public function testDecoratedHint(): void {
+        $prompt = new TestPrompt([static::ENTER], isDecorated: true);
+        $prompt->choice('Fruit?', static::FRUITS);
+
+        self::assertStringContainsString("Fruit? \033[2m(↑/↓, Enter)\033[0m", $prompt->getOutput());
     }
 
     protected function outputBeforeAnswer(TestPrompt $prompt): string {

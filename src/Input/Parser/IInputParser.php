@@ -9,7 +9,7 @@ use Runway\Console\Parameter\DTO\ParameterDTO;
 
 interface IInputParser {
     /**
-     * @param string[]       $tokens
+     * @param list<string>   $tokens
      * @param ParameterDTO[] $parameterDTOs
      */
     public function parse(array $tokens, array $parameterDTOs): IInput;

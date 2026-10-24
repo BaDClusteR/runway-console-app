@@ -80,6 +80,28 @@ class CommandListRendererTest extends TestCase {
         );
     }
 
+    public function testFormatting(): void {
+        (new CommandListRenderer($this->output))->render([
+            new CallbackCommand('run', 'Run'),
+            new CallbackCommand('db:dump', 'Dump', 'Database'),
+        ]);
+
+        self::assertStringContainsString(
+            "  <fg=cyan>run</>      Run\n\n<fg=yellow>Database</>\n  <fg=cyan>db:dump</>  Dump\n",
+            $this->output->rawStdout
+        );
+    }
+
+    public function testNumericGroupName(): void {
+        // A numeric string becomes an integer array key.
+        (new CommandListRenderer($this->output))->render([
+            new CallbackCommand('release:notes', 'Notes', '2024'),
+            new CallbackCommand('about', 'About'),
+        ]);
+
+        self::assertStringContainsString("  about          About\n\n2024\n  release:notes  Notes\n", $this->output->stdout);
+    }
+
     public function testWideNamesAreAligned(): void {
         (new CommandListRenderer($this->output))->render([
             new CallbackCommand('世界', 'Wide'),

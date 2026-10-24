@@ -6,6 +6,7 @@ namespace Runway\Console\Tests\Support;
 
 use Runway\Console\Output\Formatter\OutputFormatter;
 use Runway\Console\Prompt\Prompt;
+use RuntimeException;
 
 /**
  * A prompt that reads the given key presses and writes to memory. The terminal settings are not changed: the stty
@@ -32,12 +33,19 @@ class TestPrompt extends Prompt {
         parent::__construct(new OutputFormatter(), new FixedWidthTerminal($terminalWidth));
 
         $this->input = KeyStream::open($keys);
-        $this->output = fopen('php://memory', 'w+b');
+        $this->output = fopen('php://memory', 'w+b') ?: throw new RuntimeException('The output cannot be opened.');
         $this->isDecorated = $isDecorated;
     }
 
     public function isInteractive(): bool {
         return $this->isTerminal;
+    }
+
+    /**
+     * Writes to the terminal like the command does, e.g. before the prompt.
+     */
+    public function writeOutput(string $text): void {
+        $this->write($text);
     }
 
     /**

@@ -41,7 +41,7 @@ class InputParserTest extends TestCase {
     }
 
     /**
-     * @param string[] $tokens
+     * @param list<string> $tokens
      *
      * @return array{arguments: array<string, string|null>, options: array<string, string|null>}
      */
@@ -66,7 +66,7 @@ class InputParserTest extends TestCase {
     }
 
     /**
-     * @return iterable<string, array{string[], array<string, string|null>}>
+     * @return iterable<string, array{list<string>, array<string, string|null>}>
      */
     public static function optionsProvider(): iterable {
         yield 'long flag' => [['--force'], ['force' => '1']];
@@ -90,7 +90,7 @@ class InputParserTest extends TestCase {
     }
 
     /**
-     * @param string[]                   $tokens
+     * @param list<string>               $tokens
      * @param array<string, string|null> $expectedOptions Only the options to check.
      */
     #[DataProvider('optionsProvider')]
@@ -139,11 +139,11 @@ class InputParserTest extends TestCase {
     }
 
     /**
-     * @return iterable<string, array{string[], string}>
+     * @return iterable<string, array{list<string>, string}>
      */
     public static function invalidInputProvider(): iterable {
         yield 'missing required argument' => [[], 'Missing required argument: source'];
-        yield 'too many arguments' => [['a', 'b', 'c'], 'Too many arguments: expected at most 2, got 3'];
+        yield 'too many arguments' => [['a', 'b', 'c'], 'Too many arguments: expected at most 2, got 3. Values with spaces should be quoted.'];
         yield 'unknown long option' => [['src', '--unknown'], 'Unknown option: --unknown'];
         yield 'unknown long option with value' => [['src', '--unknown=1'], 'Unknown option: --unknown'];
         yield 'unknown short option' => [['src', '-x'], 'Unknown option: -x'];
@@ -156,7 +156,7 @@ class InputParserTest extends TestCase {
     }
 
     /**
-     * @param string[] $tokens
+     * @param list<string> $tokens
      */
     #[DataProvider('invalidInputProvider')]
     public function testInvalidInput(array $tokens, string $expectedMessage): void {
