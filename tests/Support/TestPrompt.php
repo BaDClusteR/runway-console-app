@@ -94,9 +94,10 @@ class TestPrompt extends Prompt {
     protected function stty(string $arguments): ?string {
         $this->sttyCalls[] = $arguments;
 
-        // A saved state is restored as is, other settings are added to the current ones.
-        $this->terminalState = str_starts_with($arguments, "'")
-            ? trim($arguments, "'")
+        // A saved state (quoted by escapeshellarg(): with double quotes on Windows) is restored as is, other settings
+        // are added to the current ones.
+        $this->terminalState = preg_match('/^([\'"])(.*)\1$/s', $arguments, $matches)
+            ? $matches[2]
             : "{$this->terminalState} {$arguments}";
 
         return '';
