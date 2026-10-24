@@ -53,6 +53,9 @@ class Prompt implements IPrompt {
     /** How many lines the prompt takes now: they are replaced on redrawing. */
     protected int $renderedLinesCount = 0;
 
+    /** @var string[] The keys read, but not handled yet (several keys can come in one read). */
+    protected array $pendingKeys = [];
+
     public function __construct(
         protected IOutputFormatter $formatter,
         protected ITerminal        $terminal
@@ -379,6 +382,8 @@ class Prompt implements IPrompt {
         try {
             return $interactive();
         } finally {
+            // The keys typed after the answer are not an answer to the next question (e.g. an extra Enter).
+            $this->pendingKeys = [];
             $this->write("\033[?25h");
             $this->stty(escapeshellarg($state));
         }
@@ -456,15 +461,37 @@ class Prompt implements IPrompt {
      * @throws PromptCancelledException
      */
     protected function readKey(): string {
-        $key = fread($this->input, static::READ_SIZE);
+        if ($this->pendingKeys === []) {
+            $chunk = fread($this->input, static::READ_SIZE);
+            $this->pendingKeys = ($chunk === false || $chunk === '') ? [''] : $this->splitKeys($chunk);
+        }
 
-        if ($key === false || $key === '' || in_array($key, static::CANCEL_KEYS, true)) {
+        $key = array_shift($this->pendingKeys);
+
+        if ($key === '' || in_array($key, static::CANCEL_KEYS, true)) {
             $this->clearRendered();
 
             throw new PromptCancelledException();
         }
 
         return $key;
+    }
+
+    /**
+     * Fast typing or a held key (e.g. Backspace) can bring several keys in one read: they are split, so every key
+     * works. A text (e.g. a pasted one) between the special keys is kept as one piece.
+     *
+     * @return string[]
+     */
+    protected function splitKeys(string $chunk): array {
+        preg_match_all(
+            // An escape sequence (e.g. an arrow), a single Esc, a control character, or a text.
+            '/\033(?:\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]|O.|[^\033])?|[\x00-\x1F\x7F]|[^\x00-\x1F\x7F]+/s',
+            $chunk,
+            $matches
+        );
+
+        return $matches[0];
     }
 
     /**

@@ -1,0 +1,25 @@
+services:
+  Runway\Console\Tests\Integration\Fixture\Command\GreetCommand:
+    class: Runway\Console\Tests\Integration\Fixture\Command\GreetCommand
+    tags:
+      - name: console.command
+
+  Runway\Console\Tests\Integration\Fixture\Command\FailCommand:
+    class: Runway\Console\Tests\Integration\Fixture\Command\FailCommand
+    tags:
+      - name: console.command
+
+  Runway\Console\Tests\Integration\Fixture\Command\ProgressCommand:
+    class: Runway\Console\Tests\Integration\Fixture\Command\ProgressCommand
+    tags:
+      - name: console.command
+
+  Runway\Console\Tests\Integration\Fixture\Command\TableCommand:
+    class: Runway\Console\Tests\Integration\Fixture\Command\TableCommand
+    tags:
+      - name: console.command
+
+  Runway\Console\Tests\Integration\Fixture\Command\PromptCommand:
+    class: Runway\Console\Tests\Integration\Fixture\Command\PromptCommand
+    tags:
+      - name: console.command

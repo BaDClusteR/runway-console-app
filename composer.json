@@ -14,6 +14,7 @@
         "bad_cluster/runway": "dev-main"
     },
     "require-dev": {
+        "phpunit/phpunit": "^13.4",
         "roave/security-advisories": "dev-latest"
     },
     "autoload": {
@@ -24,5 +25,16 @@
             "bootstrap.php"
         ]
     },
-    "minimum-stability": "dev"
+    "autoload-dev": {
+        "psr-4": {
+            "Runway\\Console\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "test:unit": "phpunit --testsuite unit",
+        "test:integration": "phpunit --testsuite integration"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
 }
