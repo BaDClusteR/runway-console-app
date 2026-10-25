@@ -40,7 +40,6 @@
         "phpstan": "phpstan --memory-limit=1G",
         "infection": "infection --threads=max"
     },
-    "minimum-stability": "dev",
     "prefer-stable": true,
     "config": {
         "allow-plugins": {
